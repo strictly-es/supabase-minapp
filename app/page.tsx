@@ -1,9 +1,9 @@
-/* eslint @typescript-eslint/no-explicit-any: "off", @typescript-eslint/no-unused-expressions: "off" */
 // app/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 type Post = {
   id: string
@@ -21,46 +21,52 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-export default function Page() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+export default function Page(): JSX.Element {
+  const [email, setEmail] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
   const [authMsg, setAuthMsg] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState<string>('')
   const [file, setFile] = useState<File | null>(null)
   const [postMsg, setPostMsg] = useState<string>('')
 
   const [posts, setPosts] = useState<PostWithSigned[]>([])
-  const [loadingList, setLoadingList] = useState(false)
+  const [loadingList, setLoadingList] = useState<boolean>(false)
 
-  // 認証状態監視
+  // ===== 認証状態監視 =====
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        setUserEmail(data.session.user.email ?? null)
-        void refreshList()
-      }
-    })
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user ?? null
+    // 初期セッション
+    void supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null
       setUserEmail(u?.email ?? null)
-      if (u) {
-        void refreshList()
-      } else {
-        setPosts([])
-      }
+      if (u) void refreshList()
     })
+
+    // 以降の変化を購読
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        const u = session?.user ?? null
+        setUserEmail(u?.email ?? null)
+        if (u) void refreshList()
+        else setPosts([])
+      }
+    )
+
     return () => {
-      subscription?.subscription.unsubscribe()
+      // cleanup
+      listener?.subscription.unsubscribe()
     }
   }, [])
 
-  // ログイン
-  const handleSignIn = async () => {
+  // ===== ログイン =====
+  const handleSignIn = async (): Promise<void> => {
     setAuthMsg('サインイン中...')
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
       setAuthMsg(error ? 'エラー: ' + error.message : 'ログインしました')
     } catch (e: unknown) {
       console.error(e)
@@ -68,13 +74,13 @@ export default function Page() {
     }
   }
 
-  // ログアウト
-  const handleSignOut = async () => {
+  // ===== ログアウト =====
+  const handleSignOut = async (): Promise<void> => {
     await supabase.auth.signOut()
   }
 
-  // 投稿：アップロード → posts 挿入
-  const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+  // ===== 投稿：アップロード → posts 挿入 =====
+  const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>): Promise<void> => {
     ev.preventDefault()
     setPostMsg('保存中...')
 
@@ -94,14 +100,19 @@ export default function Page() {
         file_path = path
       }
 
-      const { error: insErr } = await supabase.from('posts').insert({ user_id: user.id, content: text, file_path })
+      const { error: insErr } = await supabase
+        .from('posts')
+        .insert({ user_id: user.id, content: text, file_path })
+
       if (insErr) { setPostMsg('DB保存失敗: ' + insErr.message); return }
 
-      // フォームのクリア
+      // フォームのクリア（unused-expressionsを避けるため if で明示）
       setContent('')
       setFile(null)
       const f = document.getElementById('file') as HTMLInputElement | null
-      if (f) { f.value = '' }
+      if (f) {
+        f.value = ''
+      }
 
       setPostMsg('保存しました')
       await refreshList()
@@ -111,7 +122,7 @@ export default function Page() {
     }
   }
 
-  // 自分の投稿一覧＋署名付きURL展開
+  // ===== 自分の投稿一覧＋署名付きURL展開 =====
   async function refreshList(): Promise<void> {
     setLoadingList(true)
     try {
@@ -127,14 +138,19 @@ export default function Page() {
 
       if (error) throw error
 
+      const rows: Post[] = (data ?? []) as Post[]
+
       const withSigned: PostWithSigned[] = await Promise.all(
-        (data ?? []).map(async (row: Post): Promise<PostWithSigned> => {
+        rows.map(async (row: Post): Promise<PostWithSigned> => {
           if (row.file_path) {
             const { data: signed, error: signErr } = await supabase
               .storage
               .from('uploads')
               .createSignedUrl(row.file_path, 60 * 10)
-            return { ...row, signedUrl: signErr ? null : (signed?.signedUrl ?? null) }
+            return {
+              ...row,
+              signedUrl: signErr ? null : (signed?.signedUrl ?? null),
+            }
           }
           return { ...row, signedUrl: null }
         })
@@ -157,9 +173,21 @@ export default function Page() {
           <h2>ログイン</h2>
           <p style={{ color: '#666', fontSize: 12 }}>※サインアップ禁止。管理者招待ユーザーのみ。</p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="email" placeholder="you@company.co.jp" value={email} onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, padding: 8 }} />
-            <input type="password" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} style={{ flex: 1, padding: 8 }} />
-            <button onClick={handleSignIn} style={{ padding: '8px 12px' }}>サインイン</button>
+            <input
+              type="email"
+              placeholder="you@company.co.jp"
+              value={email}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              style={{ flex: 1, padding: 8 }}
+            />
+            <input
+              type="password"
+              placeholder="パスワード"
+              value={password}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              style={{ flex: 1, padding: 8 }}
+            />
+            <button onClick={() => { void handleSignIn() }} style={{ padding: '8px 12px' }}>サインイン</button>
           </div>
           <p style={{ color: '#666', fontSize: 12 }}>{authMsg}</p>
         </section>
@@ -170,23 +198,27 @@ export default function Page() {
           <section style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, margin: '12px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#666', fontSize: 12 }}>ログイン中: {userEmail}</span>
-              <button onClick={handleSignOut}>サインアウト</button>
+              <button onClick={() => { void handleSignOut() }}>サインアウト</button>
             </div>
 
             <h2>新規投稿</h2>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={(ev) => { void handleSubmit(ev) }}>
               <div style={{ marginBottom: 8 }}>
                 <input
                   type="text"
                   placeholder="メモや説明を入力"
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContent(e.target.value)}
                   required
                   style={{ width: '100%', padding: 8 }}
                 />
               </div>
               <div style={{ marginBottom: 8 }}>
-                <input id="file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                <input
+                  id="file"
+                  type="file"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)}
+                />
               </div>
               <button type="submit">投稿する</button>
               <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>{postMsg}</span>
@@ -201,7 +233,7 @@ export default function Page() {
               <p>まだ投稿はありません</p>
             ) : (
               <ul style={{ paddingLeft: 18 }}>
-                {posts.map((p) => (
+                {posts.map((p: PostWithSigned) => (
                   <li key={p.id} style={{ marginBottom: 6 }}>
                     <strong>{p.content}</strong>{' '}
                     <span style={{ color: '#666', fontSize: 12 }}>
