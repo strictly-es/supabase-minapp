@@ -1,11 +1,23 @@
 // src/lib/supabaseClient.ts
-import { createClient } from '@supabase/supabase-js'
+'use client'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Supabase env vars are missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+let _client: SupabaseClient | null = null
+
+export function getSupabase(): SupabaseClient {
+  if (_client) return _client
+
+  // 環境変数が無くても import 時に例外を投げない
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+
+  if (!url || !key) {
+    console.warn(
+      '[supabase] env vars missing: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY'
+    )
+  }
+
+  _client = createClient(url, key)
+  return _client
 }
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
