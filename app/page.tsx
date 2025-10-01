@@ -1,3 +1,4 @@
+/* eslint @typescript-eslint/no-explicit-any: "off", @typescript-eslint/no-unused-expressions: "off" */
 // app/page.tsx
 'use client'
 
@@ -12,18 +13,12 @@ type Post = {
   created_at: string
 }
 
-type PostWithSigned = Post & {
-  signedUrl: string | null
-}
+type PostWithSigned = Post & { signedUrl: string | null }
 
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
-  try {
-    return JSON.stringify(e)
-  } catch {
-    return 'Unknown error'
-  }
+  try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
 export default function Page() {
@@ -50,8 +45,11 @@ export default function Page() {
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUserEmail(u?.email ?? null)
-      if (u) void refreshList()
-      else setPosts([])
+      if (u) {
+        void refreshList()
+      } else {
+        setPosts([])
+      }
     })
     return () => {
       subscription?.subscription.unsubscribe()
@@ -75,9 +73,9 @@ export default function Page() {
     await supabase.auth.signOut()
   }
 
-  // 投稿：アップロード → posts挿入
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // 投稿：アップロード → posts 挿入
+  const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
     setPostMsg('保存中...')
 
     try {
@@ -99,10 +97,11 @@ export default function Page() {
       const { error: insErr } = await supabase.from('posts').insert({ user_id: user.id, content: text, file_path })
       if (insErr) { setPostMsg('DB保存失敗: ' + insErr.message); return }
 
+      // フォームのクリア
       setContent('')
       setFile(null)
       const f = document.getElementById('file') as HTMLInputElement | null
-      if (f) f.value = ''
+      if (f) { f.value = '' }
 
       setPostMsg('保存しました')
       await refreshList()
@@ -113,7 +112,7 @@ export default function Page() {
   }
 
   // 自分の投稿一覧＋署名付きURL展開
-  async function refreshList() {
+  async function refreshList(): Promise<void> {
     setLoadingList(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -158,8 +157,8 @@ export default function Page() {
           <h2>ログイン</h2>
           <p style={{ color: '#666', fontSize: 12 }}>※サインアップ禁止。管理者招待ユーザーのみ。</p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="email" placeholder="you@company.co.jp" value={email} onChange={e=>setEmail(e.target.value)} style={{ flex: 1, padding: 8 }} />
-            <input type="password" placeholder="パスワード" value={password} onChange={e=>setPassword(e.target.value)} style={{ flex: 1, padding: 8 }} />
+            <input type="email" placeholder="you@company.co.jp" value={email} onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, padding: 8 }} />
+            <input type="password" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} style={{ flex: 1, padding: 8 }} />
             <button onClick={handleSignIn} style={{ padding: '8px 12px' }}>サインイン</button>
           </div>
           <p style={{ color: '#666', fontSize: 12 }}>{authMsg}</p>
@@ -181,13 +180,13 @@ export default function Page() {
                   type="text"
                   placeholder="メモや説明を入力"
                   value={content}
-                  onChange={e => setContent(e.target.value)}
+                  onChange={(e) => setContent(e.target.value)}
                   required
                   style={{ width: '100%', padding: 8 }}
                 />
               </div>
               <div style={{ marginBottom: 8 }}>
-                <input id="file" type="file" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                <input id="file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </div>
               <button type="submit">投稿する</button>
               <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>{postMsg}</span>
@@ -219,7 +218,7 @@ export default function Page() {
                 ))}
               </ul>
             )}
-            <button onClick={() => void refreshList()}>再読み込み</button>
+            <button onClick={() => { void refreshList() }}>再読み込み</button>
           </section>
         </>
       )}
