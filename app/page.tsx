@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabaseClient'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import type { Subscription } from '@supabase/gotrue-js/dist/module/lib/types'
 
 type Post = {
   id: string
@@ -37,7 +36,7 @@ export default function Page() {
   const [posts, setPosts] = useState<PostWithSigned[]>([])
   const [loadingList, setLoadingList] = useState<boolean>(false)
 
-  // 認証状態監視
+  // ===== 認証状態監視 =====
   useEffect(() => {
     supabase.auth.getSession()
       .then(({ data }) => {
@@ -57,14 +56,16 @@ export default function Page() {
       }
     }
 
-    const subData = supabase.auth.onAuthStateChange(onChange).data
-    const sub: Subscription | undefined = subData?.subscription
+    const { data: listener } = supabase.auth.onAuthStateChange(onChange)
 
-    return () => { if (sub) sub.unsubscribe() }
+    return () => {
+      // 型インポート不要：推論された subscription をそのまま使う
+      listener?.subscription.unsubscribe()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ログイン
+  // ===== ログイン =====
   const handleSignIn = async (): Promise<void> => {
     setAuthMsg('サインイン中...')
     try {
@@ -79,14 +80,14 @@ export default function Page() {
     }
   }
 
-  // ログアウト
+  // ===== ログアウト =====
   const handleSignOut = async (): Promise<void> => {
     await supabase.auth.signOut()
   }
 
-  // 投稿：アップロード → posts 挿入
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault()
+  // ===== 投稿：アップロード → posts 挿入 =====
+  const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    ev.preventDefault()
     setPostMsg('保存中...')
 
     try {
@@ -125,7 +126,7 @@ export default function Page() {
     }
   }
 
-  // 自分の投稿一覧＋署名付きURL展開
+  // ===== 自分の投稿一覧＋署名付きURL展開 =====
   async function refreshList(): Promise<void> {
     setLoadingList(true)
     try {
@@ -173,9 +174,23 @@ export default function Page() {
           <h2>ログイン</h2>
           <p style={{ color: '#666', fontSize: 12 }}>※サインアップ禁止。管理者招待ユーザーのみ。</p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="email" placeholder="you@company.co.jp" value={email} onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, padding: 8 }} />
-            <input type="password" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} style={{ flex: 1, padding: 8 }} />
-            <button onClick={() => { handleSignIn().catch(console.error) }} style={{ padding: '8px 12px' }}>サインイン</button>
+            <input
+              type="email"
+              placeholder="you@company.co.jp"
+              value={email}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              style={{ flex: 1, padding: 8 }}
+            />
+            <input
+              type="password"
+              placeholder="パスワード"
+              value={password}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              style={{ flex: 1, padding: 8 }}
+            />
+            <button onClick={() => { handleSignIn().catch(console.error) }} style={{ padding: '8px 12px' }}>
+              サインイン
+            </button>
           </div>
           <p style={{ color: '#666', fontSize: 12 }}>{authMsg}</p>
         </section>
@@ -186,23 +201,29 @@ export default function Page() {
           <section style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, margin: '12px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#666', fontSize: 12 }}>ログイン中: {userEmail}</span>
-              <button onClick={() => { handleSignOut().catch(console.error) }}>サインアウト</button>
+              <button onClick={() => { handleSignOut().catch(console.error) }}>
+                サインアウト
+              </button>
             </div>
 
             <h2>新規投稿</h2>
-            <form onSubmit={(e) => { handleSubmit(e).catch(console.error) }}>
+            <form onSubmit={(ev) => { handleSubmit(ev).catch(console.error) }}>
               <div style={{ marginBottom: 8 }}>
                 <input
                   type="text"
                   placeholder="メモや説明を入力"
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContent(e.target.value)}
                   required
                   style={{ width: '100%', padding: 8 }}
                 />
               </div>
               <div style={{ marginBottom: 8 }}>
-                <input id="file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                <input
+                  id="file"
+                  type="file"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)}
+                />
               </div>
               <button type="submit">投稿する</button>
               <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>{postMsg}</span>
@@ -217,7 +238,7 @@ export default function Page() {
               <p>まだ投稿はありません</p>
             ) : (
               <ul style={{ paddingLeft: 18 }}>
-                {posts.map((p) => (
+                {posts.map((p: PostWithSigned) => (
                   <li key={p.id} style={{ marginBottom: 6 }}>
                     <strong>{p.content}</strong>{' '}
                     <span style={{ color: '#666', fontSize: 12 }}>
@@ -234,7 +255,9 @@ export default function Page() {
                 ))}
               </ul>
             )}
-            <button onClick={() => { refreshList().catch(console.error) }}>再読み込み</button>
+            <button onClick={() => { refreshList().catch(console.error) }}>
+              再読み込み
+            </button>
           </section>
         </>
       )}
