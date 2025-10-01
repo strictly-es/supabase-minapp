@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -11,6 +12,20 @@ type Post = {
   created_at: string
 }
 
+type PostWithSigned = Post & {
+  signedUrl: string | null
+}
+
+function toErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (typeof e === 'string') return e
+  try {
+    return JSON.stringify(e)
+  } catch {
+    return 'Unknown error'
+  }
+}
+
 export default function Page() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,38 +36,46 @@ export default function Page() {
   const [file, setFile] = useState<File | null>(null)
   const [postMsg, setPostMsg] = useState<string>('')
 
-  const [posts, setPosts] = useState<(Post & { signedUrl?: string | null })[]>([])
+  const [posts, setPosts] = useState<PostWithSigned[]>([])
   const [loadingList, setLoadingList] = useState(false)
 
+  // 認証状態監視
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
         setUserEmail(data.session.user.email ?? null)
-        refreshList()
+        void refreshList()
       }
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUserEmail(u?.email ?? null)
-      if (u) refreshList()
+      if (u) void refreshList()
       else setPosts([])
     })
-    return () => { sub?.subscription.unsubscribe() }
+    return () => {
+      subscription?.subscription.unsubscribe()
+    }
   }, [])
 
+  // ログイン
   const handleSignIn = async () => {
     setAuthMsg('サインイン中...')
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       setAuthMsg(error ? 'エラー: ' + error.message : 'ログインしました')
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e)
-      setAuthMsg('通信エラー（URL/キー/HTTPS/拡張機能）をご確認ください。')
+      setAuthMsg('通信エラー: ' + toErrorMessage(e))
     }
   }
 
-  const handleSignOut = async () => { await supabase.auth.signOut() }
+  // ログアウト
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+  }
 
+  // 投稿：アップロード → posts挿入
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setPostMsg('保存中...')
@@ -80,14 +103,16 @@ export default function Page() {
       setFile(null)
       const f = document.getElementById('file') as HTMLInputElement | null
       if (f) f.value = ''
+
       setPostMsg('保存しました')
       await refreshList()
-    } catch (e) {
+    } catch (e: unknown) {
       console.error('[submit:error]', e)
-      setPostMsg('保存に失敗しました（ネットワーク/権限）。Consoleをご確認ください。')
+      setPostMsg('保存に失敗しました: ' + toErrorMessage(e))
     }
   }
 
+  // 自分の投稿一覧＋署名付きURL展開
   async function refreshList() {
     setLoadingList(true)
     try {
@@ -103,18 +128,21 @@ export default function Page() {
 
       if (error) throw error
 
-      const withSigned = await Promise.all((data ?? []).map(async (row: any) => {
-        if (row.file_path) {
-          const { data: signed, error: signErr } = await supabase.storage
-            .from('uploads')
-            .createSignedUrl(row.file_path, 60 * 10)
-          return { ...row, signedUrl: signErr ? null : signed?.signedUrl }
-        }
-        return { ...row, signedUrl: null }
-      }))
+      const withSigned: PostWithSigned[] = await Promise.all(
+        (data ?? []).map(async (row: Post): Promise<PostWithSigned> => {
+          if (row.file_path) {
+            const { data: signed, error: signErr } = await supabase
+              .storage
+              .from('uploads')
+              .createSignedUrl(row.file_path, 60 * 10)
+            return { ...row, signedUrl: signErr ? null : (signed?.signedUrl ?? null) }
+          }
+          return { ...row, signedUrl: null }
+        })
+      )
 
-      setPosts(withSigned as any)
-    } catch (e) {
+      setPosts(withSigned)
+    } catch (e: unknown) {
       console.error('[list:error]', e)
     } finally {
       setLoadingList(false)
@@ -149,7 +177,14 @@ export default function Page() {
             <h2>新規投稿</h2>
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 8 }}>
-                <input type="text" placeholder="メモや説明を入力" value={content} onChange={e => setContent(e.target.value)} required style={{ width: '100%', padding: 8 }} />
+                <input
+                  type="text"
+                  placeholder="メモや説明を入力"
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: 8 }}
+                />
               </div>
               <div style={{ marginBottom: 8 }}>
                 <input id="file" type="file" onChange={e => setFile(e.target.files?.[0] ?? null)} />
@@ -184,7 +219,7 @@ export default function Page() {
                 ))}
               </ul>
             )}
-            <button onClick={refreshList}>再読み込み</button>
+            <button onClick={() => void refreshList()}>再読み込み</button>
           </section>
         </>
       )}
