@@ -21,7 +21,7 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-export default function Page(): JSX.Element {
+export default function Page() {
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [authMsg, setAuthMsg] = useState<string>('')
