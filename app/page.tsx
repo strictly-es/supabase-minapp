@@ -10,6 +10,8 @@ type Post = {
   user_id: string
   content: string
   file_path: string | null
+  // 新規追加: タイトル列（nullable）
+  title: string | null
   created_at: string
 }
 
@@ -30,6 +32,8 @@ export default function Page() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   const [content, setContent] = useState<string>('')
+  // 新規追加入力: タイトル
+  const [title, setTitle] = useState<string>('')
   const [file, setFile] = useState<File | null>(null)
   const [postMsg, setPostMsg] = useState<string>('')
 
@@ -96,7 +100,9 @@ export default function Page() {
       if (!user) { setPostMsg('ログインが必要です'); return }
 
       const text = content.trim()
+      const ttl = title.trim()
       if (!text) { setPostMsg('内容を入力してください'); return }
+      if (!ttl) { setPostMsg('タイトルを入力してください'); return }
 
       let file_path: string | null = null
       if (file) {
@@ -108,12 +114,13 @@ export default function Page() {
 
       const { error: insErr } = await supabase
         .from('posts')
-        .insert({ user_id: user.id, content: text, file_path })
+        .insert({ user_id: user.id, content: text, file_path, title: ttl })
 
       if (insErr) { setPostMsg('DB保存失敗: ' + insErr.message); return }
 
       // フォームのクリア
       setContent('')
+      setTitle('')
       setFile(null)
       const f = document.getElementById('file') as HTMLInputElement | null
       if (f) f.value = ''
@@ -211,6 +218,16 @@ export default function Page() {
               <div style={{ marginBottom: 8 }}>
                 <input
                   type="text"
+                  placeholder="タイトルを入力"
+                  value={title}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: 8 }}
+                />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  type="text"
                   placeholder="メモや説明を入力"
                   value={content}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContent(e.target.value)}
@@ -240,7 +257,8 @@ export default function Page() {
               <ul style={{ paddingLeft: 18 }}>
                 {posts.map((p: PostWithSigned) => (
                   <li key={p.id} style={{ marginBottom: 6 }}>
-                    <strong>{p.content}</strong>{' '}
+                    <strong>{p.title ?? '(無題)'}</strong>{' '}
+                    <span style={{ color: '#666' }}>— {p.content}</span>{' '}
                     <span style={{ color: '#666', fontSize: 12 }}>
                       ({new Date(p.created_at).toLocaleString()})
                     </span>
