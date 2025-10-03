@@ -40,6 +40,22 @@ type Item = {
   hasElev: boolean | null
 }
 
+type SortableKey =
+  | 'id'
+  | 'name'
+  | 'walk'
+  | 'built'
+  | 'area'
+  | 'listPrice'
+  | 'unitPrice'
+  | 'coefTotal'
+  | 'targetClose'
+  | 'raise'
+  | 'buyTarget'
+  | 'pastMin'
+  | 'pastMax'
+  | 'pastMiniDays'
+
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
@@ -58,7 +74,7 @@ export default function TabListPage() {
   // View states
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
   const [sortAscUnit, setSortAscUnit] = useState<boolean>(true)
-  const [tableSortKey, setTableSortKey] = useState<keyof Item>('id')
+  const [tableSortKey, setTableSortKey] = useState<SortableKey>('id')
   const [tableSortAsc, setTableSortAsc] = useState<boolean>(true)
 
   // Filters
@@ -106,7 +122,6 @@ export default function TabListPage() {
           const brokerage = raise < 10_000_000 ? 550_000 : Math.round(raise * 0.055)
           const other = Math.round(raise * 0.075) // その他（募集総額の7.5%）
           const buyTarget = Math.max(0, raise - moveCost - brokerage - other)
-          console.log(other);
 
           const pastMiniDays = diffDays(parseDate(r.reins_registered_date), parseDate(r.contract_date))
           return {
@@ -180,21 +195,23 @@ export default function TabListPage() {
   const tableSorted = useMemo(() => {
     const arr = filtered.slice()
     arr.sort((a, b) => {
-      const k = tableSortKey
-      const va = a[k] as any
-      const vb = b[k] as any
+      const k: SortableKey = tableSortKey
+      const va = a[k] as Item[SortableKey]
+      const vb = b[k] as Item[SortableKey]
       if (typeof va === 'string' || typeof vb === 'string') {
-        const r = String(va).localeCompare(String(vb))
+        const r = String(va ?? '').localeCompare(String(vb ?? ''))
         return tableSortAsc ? r : -r
       }
-      const r = (Number(va) || 0) - (Number(vb) || 0)
+      const na = Number(va ?? 0)
+      const nb = Number(vb ?? 0)
+      const r = na - nb
       return tableSortAsc ? r : -r
     })
     return arr
   }, [filtered, tableSortKey, tableSortAsc])
 
   function toggleSortUnitPrice() { setSortAscUnit(!sortAscUnit) }
-  function setTableSort(k: keyof Item) { if (tableSortKey === k) setTableSortAsc(!tableSortAsc); else { setTableSortKey(k); setTableSortAsc(true) } }
+  function setTableSort(k: SortableKey) { if (tableSortKey === k) setTableSortAsc(!tableSortAsc); else { setTableSortKey(k); setTableSortAsc(true) } }
 
   function judge(p: Item) {
     const diff = p.pastMin - p.buyTarget
