@@ -18,6 +18,8 @@ type FormState = {
   max_price: string
   area_sqm: string
   coef_total: string
+  interior_level_coef: string
+  contract_year_coef: string
   past_min: string
 }
 
@@ -43,6 +45,8 @@ export default function TabRegistPage() {
     max_price: '',
     area_sqm: '',
     coef_total: '',
+    interior_level_coef: '',
+    contract_year_coef: '',
     past_min: '',
   })
   const [pdf, setPdf] = useState<File | null>(null)
@@ -101,6 +105,8 @@ export default function TabRegistPage() {
         max_price: toBigInt(form.max_price),
         area_sqm: toNum(form.area_sqm),
         coef_total: toNum(form.coef_total),
+        interior_level_coef: toNum(form.interior_level_coef),
+        contract_year_coef: toNum(form.contract_year_coef),
         past_min: toBigInt(form.past_min),
       }
 
@@ -114,7 +120,7 @@ export default function TabRegistPage() {
       setForm({
         estate_name: '', management: '', pref: '', addr1: '', addr2: '',
         floor: '', elevator: '', reins_registered_date: '', contract_date: '',
-        max_price: '', area_sqm: '', coef_total: '', past_min: '',
+        max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '',
       })
       setPdf(null)
       const f = document.getElementById('pdf') as HTMLInputElement | null
@@ -223,6 +229,14 @@ export default function TabRegistPage() {
                     <input name="coef_total" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.05"
                       value={form.coef_total} onChange={onChange('coef_total')} />
                   </label>
+                  <label className="block">内装レベル係数
+                    <input name="interior_level_coef" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.00"
+                      value={form.interior_level_coef} onChange={onChange('interior_level_coef')} />
+                  </label>
+                  <label className="block">成約年数上乗せ係数
+                    <input name="contract_year_coef" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.00"
+                      value={form.contract_year_coef} onChange={onChange('contract_year_coef')} />
+                  </label>
                   <label className="block">過去MIN価格
                     <input name="past_min" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="4800000"
                       value={form.past_min} onChange={onChange('past_min')} />
@@ -249,4 +263,3 @@ export default function TabRegistPage() {
     </div>
   )
 }
-
