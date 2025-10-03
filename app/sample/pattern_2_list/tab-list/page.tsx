@@ -73,7 +73,9 @@ export default function TabListPage() {
 
   // View states
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
-  const [sortAscUnit, setSortAscUnit] = useState<boolean>(true)
+  type CardSortKey = 'unitPrice' | 'buyTarget' | 'pastMin' | 'targetClose' | 'raise' | 'pastMiniDays' | 'coefTotal'
+  const [cardSortKey, setCardSortKey] = useState<CardSortKey>('unitPrice')
+  const [cardSortAsc, setCardSortAsc] = useState<boolean>(true)
   const [tableSortKey, setTableSortKey] = useState<SortableKey>('id')
   const [tableSortAsc, setTableSortAsc] = useState<boolean>(true)
 
@@ -82,7 +84,11 @@ export default function TabListPage() {
   const [fArea, setFArea] = useState<string>('')
   const [fFloor, setFFloor] = useState<string>('')
   const [fElev, setFElev] = useState<string>('') // '' | 'yes' | 'no'
-  const [fPrice, setFPrice] = useState<string>('') // 万円上限（募集総額ベースにマップ）
+  // 金額系（すべて万円入力、内部で×10000）
+  const [fBuyMax, setFBuyMax] = useState<string>('') // 買付目標額 上限（万円）
+  const [fPastMinMax, setFPastMinMax] = useState<string>('') // 過去MIN 上限（万円）
+  const [fTargetCloseMax, setFTargetCloseMax] = useState<string>('') // 目標成約額 上限（万円）
+  const [fRaiseMax, setFRaiseMax] = useState<string>('') // 募集総額 上限（万円）
 
   // Badge thresholds (fixed)
   const thGap = 300000
@@ -121,7 +127,8 @@ export default function TabListPage() {
           const moveCost = area < 60 ? Math.round(area * 132000) : (area >= 80 ? Math.round(area * 123000) : Math.round(area * (132000 - (area - 60) * 400)))
           const brokerage = raise < 10_000_000 ? 550_000 : Math.round(raise * 0.055)
           const other = Math.round(raise * 0.075) // その他（募集総額の7.5%）
-          const buyTarget = Math.max(0, raise - moveCost - brokerage - other)
+          // 買付目標額（0未満の場合はマイナスをそのまま表示）
+          const buyTarget = raise - moveCost - brokerage - other
 
           const pastMiniDays = diffDays(parseDate(r.reins_registered_date), parseDate(r.contract_date))
           return {
@@ -161,7 +168,10 @@ export default function TabListPage() {
     const key = fKey.trim().toLowerCase()
     const areaMin = Number.parseFloat(fArea)
     const floorMin = Number.parseInt(fFloor, 10)
-    const priceMaxMan = Number.parseFloat(fPrice)
+    const buyMaxMan = Number.parseFloat(fBuyMax)
+    const pastMinMaxMan = Number.parseFloat(fPastMinMax)
+    const targetCloseMaxMan = Number.parseFloat(fTargetCloseMax)
+    const raiseMaxMan = Number.parseFloat(fRaiseMax)
     return items.filter((p) => {
       if (key) {
         const hay = `${p.name} ${p.addr1}`.toLowerCase()
@@ -176,20 +186,37 @@ export default function TabListPage() {
         if (fElev === 'yes' && p.hasElev !== true) return false
         if (fElev === 'no' && p.hasElev !== false) return false
       }
-      if (isFinite(priceMaxMan) && priceMaxMan > 0) {
-        const priceMax = priceMaxMan * 10000
-        if (p.listPrice > priceMax) return false
+      if (isFinite(buyMaxMan) && buyMaxMan > 0) {
+        const max = buyMaxMan * 10000
+        if (p.buyTarget > max) return false
+      }
+      if (isFinite(pastMinMaxMan) && pastMinMaxMan > 0) {
+        const max = pastMinMaxMan * 10000
+        if (p.pastMin > max) return false
+      }
+      if (isFinite(targetCloseMaxMan) && targetCloseMaxMan > 0) {
+        const max = targetCloseMaxMan * 10000
+        if (p.targetClose > max) return false
+      }
+      if (isFinite(raiseMaxMan) && raiseMaxMan > 0) {
+        const max = raiseMaxMan * 10000
+        if (p.raise > max) return false
       }
       return true
     })
-  }, [items, fKey, fArea, fFloor, fElev, fPrice])
+  }, [items, fKey, fArea, fFloor, fElev, fBuyMax, fPastMinMax, fTargetCloseMax, fRaiseMax])
 
   // Card sorted
   const cardSorted = useMemo(() => {
     const arr = filtered.slice()
-    arr.sort((a, b) => sortAscUnit ? (a.unitPrice - b.unitPrice) : (b.unitPrice - a.unitPrice))
+    arr.sort((a, b) => {
+      const va = a[cardSortKey] as unknown as number
+      const vb = b[cardSortKey] as unknown as number
+      const r = (va ?? 0) - (vb ?? 0)
+      return cardSortAsc ? r : -r
+    })
     return arr
-  }, [filtered, sortAscUnit])
+  }, [filtered, cardSortKey, cardSortAsc])
 
   // Table sorted
   const tableSorted = useMemo(() => {
@@ -210,12 +237,15 @@ export default function TabListPage() {
     return arr
   }, [filtered, tableSortKey, tableSortAsc])
 
-  function toggleSortUnitPrice() { setSortAscUnit(!sortAscUnit) }
+  function setCardSort(k: CardSortKey) {
+    if (cardSortKey === k) setCardSortAsc(!cardSortAsc)
+    else { setCardSortKey(k); setCardSortAsc(true) }
+  }
   function setTableSort(k: SortableKey) { if (tableSortKey === k) setTableSortAsc(!tableSortAsc); else { setTableSortKey(k); setTableSortAsc(true) } }
 
   function judge(p: Item) {
     const diff = p.pastMin - p.buyTarget
-    const near = diff >= 0 && diff <= thGap
+    const near = Math.abs(diff) <= thGap
     const fast = p.pastMiniDays > 0 && p.pastMiniDays <= thDays
     const high = p.targetClose > p.pastMax && p.coefTotal >= thCoef
     const focus = near && fast
@@ -223,7 +253,8 @@ export default function TabListPage() {
   }
 
   function resetFilters() {
-    setFKey(''); setFArea(''); setFFloor(''); setFElev(''); setFPrice('')
+    setFKey(''); setFArea(''); setFFloor(''); setFElev('');
+    setFBuyMax(''); setFPastMinMax(''); setFTargetCloseMax(''); setFRaiseMax('')
   }
 
   return (
@@ -289,8 +320,17 @@ export default function TabListPage() {
                   <option value="no">無</option>
                 </select>
               </label>
-              <label className="block text-sm">売出価格（万円）上限
-                <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3000" value={fPrice} onChange={e=>setFPrice(e.target.value)} />
+              <label className="block text-sm">買付目標額（万円）上限
+                <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3000" value={fBuyMax} onChange={e=>setFBuyMax(e.target.value)} />
+              </label>
+              <label className="block text-sm">過去MIN（万円）上限
+                <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3000" value={fPastMinMax} onChange={e=>setFPastMinMax(e.target.value)} />
+              </label>
+              <label className="block text-sm">目標成約額（万円）上限
+                <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3000" value={fTargetCloseMax} onChange={e=>setFTargetCloseMax(e.target.value)} />
+              </label>
+              <label className="block text-sm">募集総額（万円）上限
+                <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3000" value={fRaiseMax} onChange={e=>setFRaiseMax(e.target.value)} />
               </label>
               {/* バッジ基準（しきい値）エリアは削除 */}
               <button className="w-full bg-black text-white rounded-lg py-2 mt-2" onClick={(e)=>e.preventDefault()}>この条件で絞り込む</button>
@@ -299,7 +339,16 @@ export default function TabListPage() {
             {/* Card List */}
             <section id="listCards" className={`md:col-span-3 bg-white rounded-2xl shadow overflow-hidden ${viewMode==='card' ? '' : 'hidden'}`}>
               <div className="border-b p-4 flex items-center justify-between text-sm text-gray-600">
-                <div>並び替え： <button className="underline" onClick={toggleSortUnitPrice} title="単価の昇順/降順を切替">単価（円/㎡）</button></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>並び替え：</span>
+                  <button className="underline" onClick={() => setCardSort('unitPrice')}>単価（円/㎡）</button>
+                  <button className="underline" onClick={() => setCardSort('buyTarget')}>買付目標額</button>
+                  <button className="underline" onClick={() => setCardSort('pastMin')}>過去MIN</button>
+                  <button className="underline" onClick={() => setCardSort('targetClose')}>目標成約額</button>
+                  <button className="underline" onClick={() => setCardSort('raise')}>募集総額</button>
+                  <button className="underline" onClick={() => setCardSort('pastMiniDays')}>過去MINI日数</button>
+                  <button className="underline" onClick={() => setCardSort('coefTotal')}>係数計</button>
+                </div>
                 <div className="text-xs text-gray-400">{loading ? '読み込み中…' : msg}</div>
               </div>
               <div id="cardsContainer" className="divide-y">
@@ -308,15 +357,15 @@ export default function TabListPage() {
                   const diffStr = (j.diff >= 0 ? '-' : '+') + Math.abs(j.diff).toLocaleString('ja-JP') + '円'
                   return (
                     <article key={p.id} className="p-4 grid md:grid-cols-12 gap-3 hover:bg-gray-50">
-                      <div className="md:col-span-5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-blue-700">{p.name}</span>
-                          <div className="flex gap-1">
+                      <div className="md:col-span-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap gap-1">
                             {j.near && <span className="badge badge-danger" title="過去MINと買付が接近">差が小さい</span>}
                             {j.fast && <span className="badge badge-fast" title="過去MINIの日数が少ない">日数が少ない</span>}
                             {j.high && <span className="badge badge-warn" title="過去MAXより高い目標成約＆係数高め">係数高い</span>}
                             {j.focus && <span className="badge badge-focus" title="差が小さく日数が少ない">要注目</span>}
                           </div>
+                          <span className="font-medium text-blue-700">{p.name}</span>
                         </div>
                         <div className="text-xs text-gray-500">{p.addr1}</div>
                         <div className="mt-1 flex flex-wrap gap-2 text-xs">
@@ -325,18 +374,18 @@ export default function TabListPage() {
                           <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full">単価 {p.unitPrice.toLocaleString('ja-JP')}円/㎡</span>
                         </div>
                       </div>
-                      <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-sm">
-                        <div><div className="text-gray-500">買付目標額</div><div className="font-semibold num">{yen(p.buyTarget)}</div></div>
-                        <div><div className="text-gray-500">過去MIN</div><div className="font-semibold num">{yen(p.pastMin)}</div><div className="text-[11px] text-gray-500">差：<span className={j.near ? 'text-rose-600 font-semibold' : ''}>{diffStr}</span></div></div>
-                        <div><div className="text-gray-500">目標成約額</div><div className="font-semibold num">{yen(p.targetClose)}</div><div className="text-[11px] text-gray-500">過去MAX：<span className={j.high ? 'text-amber-700 font-semibold' : ''}>{yen(p.pastMax)}</span></div></div>
-                        <div><div className="text-gray-500">募集総額</div><div className="font-semibold num">{yen(p.raise)}</div></div>
-                        <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+                      <div className="md:col-span-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-1 text-sm">
+                        <div><div className="text-gray-500">買付目標額</div><div className="font-semibold num whitespace-nowrap">{yen(p.buyTarget)}</div></div>
+                        <div><div className="text-gray-500">過去MIN</div><div className="font-semibold num whitespace-nowrap">{yen(p.pastMin)}</div></div>
+                        <div><div className="text-gray-500">目標成約額</div><div className="font-semibold num whitespace-nowrap">{yen(p.targetClose)}</div></div>
+                        <div><div className="text-gray-500">募集総額</div><div className="font-semibold num whitespace-nowrap">{yen(p.raise)}</div></div>
+                        <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5">
                           <div className="text-violet-700 text-xs">過去MINI日数</div>
-                          <div className="font-semibold num text-lg text-violet-800">{p.pastMiniDays}日</div>
+                          <div className="font-semibold num text-base text-violet-800 whitespace-nowrap">{p.pastMiniDays}日</div>
                         </div>
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5">
                           <div className="text-amber-700 text-xs">係数計</div>
-                          <div className="font-semibold num text-lg text-amber-800">{p.coefTotal.toFixed(2)}</div>
+                          <div className="font-semibold num text-base text-amber-800 whitespace-nowrap">{p.coefTotal.toFixed(2)}</div>
                         </div>
                       </div>
                     </article>
