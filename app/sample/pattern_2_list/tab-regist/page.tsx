@@ -246,7 +246,7 @@ export default function TabRegistPage() {
 
               <div className="flex items-center justify-end gap-2">
                 <button type="reset" className="px-3 py-1.5 bg-gray-100 rounded-lg" disabled={submitting}
-                  onClick={() => { setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', past_min: '', }); setPdf(null); setMsg(''); }}>
+                  onClick={() => { setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '', }); setPdf(null); setMsg(''); }}>
                   リセット
                 </button>
                 <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg" disabled={submitting}>登録（デモ）</button>
