@@ -356,7 +356,6 @@ export default function TabListPage() {
               <div id="cardsContainer" className="divide-y">
                 {cardSorted.map((p) => {
                   const j = judge(p)
-                  const diffStr = (j.diff >= 0 ? '-' : '+') + Math.abs(j.diff).toLocaleString('ja-JP') + '円'
                   return (
                     <article key={p.id} className="p-4 grid md:grid-cols-12 gap-3 hover:bg-gray-50">
                       <div className="md:col-span-4">
