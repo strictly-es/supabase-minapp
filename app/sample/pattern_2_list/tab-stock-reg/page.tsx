@@ -101,7 +101,7 @@ export default function StockRegPage() {
   }, [form.area_sqm, form.list_price, form.registered_date, form.estate_entry_id, entries])
 
   const onChange = <K extends keyof FormState>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [key]: e.target.value as any }))
+    setForm(prev => ({ ...prev, [key]: e.target.value as unknown as FormState[K] }))
   }
 
   async function handleSubmit(ev: React.FormEvent<HTMLFormElement>) {
@@ -277,4 +277,3 @@ export default function StockRegPage() {
     </div>
   )
 }
-
