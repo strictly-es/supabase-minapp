@@ -53,7 +53,7 @@ export default function DetailPage() {
           const { data: signed } = await supabase.storage.from('uploads').createSignedUrl(path, 600)
           if (mounted) setSignedUrl(signed?.signedUrl ?? null)
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e)
         if (mounted) setMsg('読み込みに失敗しました')
       }
