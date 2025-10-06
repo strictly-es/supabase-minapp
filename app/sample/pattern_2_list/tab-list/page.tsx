@@ -21,6 +21,7 @@ type Row = {
 
 type Item = {
   id: number
+  rowId: string
   name: string
   addr1: string
   station: string
@@ -133,6 +134,7 @@ export default function TabListPage() {
           const pastMiniDays = diffDays(parseDate(r.reins_registered_date), parseDate(r.contract_date))
           return {
             id: idx + 1,
+            rowId: r.id,
             name,
             addr1: adr,
             station: '',
@@ -365,7 +367,9 @@ export default function TabListPage() {
                             {j.high && <span className="badge badge-warn" title="過去MAXより高い目標成約＆係数高め">係数高い</span>}
                             {j.focus && <span className="badge badge-focus" title="差が小さく日数が少ない">要注目</span>}
                           </div>
-                          <span className="font-medium text-blue-700">{p.name}</span>
+                          <Link href={`/sample/pattern_2_list/tab-detail/${p.rowId}`} className="font-medium text-blue-700 underline">
+                            {p.name}
+                          </Link>
                         </div>
                         <div className="text-xs text-gray-500">{p.addr1}</div>
                         <div className="mt-1 flex flex-wrap gap-2 text-xs">
