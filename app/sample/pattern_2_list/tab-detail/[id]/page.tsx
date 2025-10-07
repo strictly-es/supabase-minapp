@@ -23,6 +23,14 @@ type Row = {
   contract_year_coef: number | null
 }
 
+type Stock = {
+  id: string
+  floor: number | null
+  area_sqm: number | null
+  list_price: number | null
+  registered_date: string | null
+}
+
 function safeNum(n: number | null | undefined, d = 0): number { return (typeof n === 'number' && isFinite(n)) ? n : d }
 function parseDate(s: string | null): string { if (!s) return '-'; const d = new Date(s); return isNaN(+d) ? '-' : d.toLocaleDateString('ja-JP') }
 function yen(n: number): string { return n.toLocaleString('ja-JP') }
@@ -34,6 +42,7 @@ export default function DetailPage() {
   const [row, setRow] = useState<Row | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [msg, setMsg] = useState<string>('')
+  const [stocks, setStocks] = useState<Stock[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -53,6 +62,14 @@ export default function DetailPage() {
           const { data: signed } = await supabase.storage.from('uploads').createSignedUrl(path, 600)
           if (mounted) setSignedUrl(signed?.signedUrl ?? null)
         }
+        // fetch current on-sale stocks for this entry
+        const { data: sData, error: sErr } = await supabase
+          .from('estate_stocks')
+          .select('id, floor, area_sqm, list_price, registered_date')
+          .eq('estate_entry_id', id)
+          .order('registered_date', { ascending: false })
+        if (sErr) throw sErr
+        if (mounted) setStocks((sData ?? []) as Stock[])
       } catch (e: unknown) {
         console.error(e)
         if (mounted) setMsg('読み込みに失敗しました')
@@ -144,6 +161,24 @@ export default function DetailPage() {
                 <div><dt className="text-gray-500">係数計</dt><dd className="num">{computed ? computed.coefSum.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">備考</dt><dd className="text-gray-500">前提設定の変更は即時反映</dd></div>
               </dl>
+            </section>
+
+            {/* 現在販売中の在庫物件 */}
+            <section className="rounded-2xl border border-gray-200 p-5 space-y-3">
+              <h3 className="font-semibold">現在販売中の在庫物件</h3>
+              {stocks.length === 0 ? (
+                <p className="text-sm text-gray-500">現在販売中の在庫はありません</p>
+              ) : (
+                <ul className="text-sm space-y-1">
+                  {stocks.map((s) => (
+                    <li key={s.id}>
+                      ・階数 {typeof s.floor === 'number' ? s.floor : '-'}、m²数 {typeof s.area_sqm === 'number' ? s.area_sqm.toFixed(2) : '-'} 、販売価格 {typeof s.list_price === 'number' ? yen(s.list_price) : '-'}
+                      {' '}
+                      <Link href={`/sample/pattern_2_list/tab-stock/${s.id}`} className="text-blue-600 underline">詳細</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             {msg && <p className="text-xs text-red-600">{msg}</p>}
