@@ -273,8 +273,6 @@ export default function TabListPage() {
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
-            <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">一覧</button></li>
-            <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</button></li>
             <li>
               <Link href="/sample/pattern_2_list/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">
                 登録

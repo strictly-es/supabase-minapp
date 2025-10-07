@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { getSupabase } from '@/lib/supabaseClient'
 
 type Pref = '' | '神奈川' | '東京' | '大阪'
@@ -149,8 +150,9 @@ export default function TabRegistPage() {
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
-            <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</button></li>
-            <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</button></li>
+            <li>
+              <Link href="/sample/pattern_2_list/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</Link>
+            </li>
             <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">登録</button></li>
           </ul>
         </nav>

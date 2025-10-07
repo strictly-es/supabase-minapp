@@ -109,7 +109,6 @@ export default function DetailPage() {
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
-            <li><Link href="/sample/pattern_2_list/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</Link></li>
             <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">詳細</span></li>
             <li><Link href="/sample/pattern_2_list/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">登録</Link></li>
           </ul>
@@ -165,7 +164,10 @@ export default function DetailPage() {
 
             {/* 現在販売中の在庫物件 */}
             <section className="rounded-2xl border border-gray-200 p-5 space-y-3">
-              <h3 className="font-semibold">現在販売中の在庫物件</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">現在販売中の在庫物件</h3>
+                <Link href="/sample/pattern_2_list/tab-stock-reg" className="px-2 py-1 rounded bg-gray-100 text-sm">在庫登録</Link>
+              </div>
               {stocks.length === 0 ? (
                 <p className="text-sm text-gray-500">現在販売中の在庫はありません</p>
               ) : (
