@@ -164,7 +164,7 @@ export default function DetailPage() {
             <section className="rounded-2xl border border-gray-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">現在販売中の在庫物件</h3>
-                <Link href="/sample/pattern_2_list/tab-stock-reg" className="px-2 py-1 rounded bg-gray-100 text-sm">在庫登録</Link>
+                <Link href={`/sample/pattern_2_list/tab-stock-reg?entryId=${id ?? ''}`} className="px-2 py-1 rounded bg-gray-100 text-sm">在庫登録</Link>
               </div>
               {stocks.length === 0 ? (
                 <p className="text-sm text-gray-500">現在販売中の在庫はありません</p>
