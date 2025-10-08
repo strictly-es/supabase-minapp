@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 
 type Entry = { id: string; estate_name: string | null; past_min: number | null }
 
@@ -35,8 +34,6 @@ function toErrorMessage(e: unknown): string {
 
 export default function StockRegPage() {
   const supabase = getSupabase()
-  const searchParams = useSearchParams()
-  const preselectEntryId = searchParams.get('entryId') || ''
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [form, setForm] = useState<FormState>({
@@ -76,9 +73,10 @@ export default function StockRegPage() {
         const list = (data ?? []) as Entry[]
         if (mounted) setEntries(list)
         // プリセレクト（遷移元が指定した場合）
-        if (mounted && preselectEntryId && !form.estate_entry_id) {
-          const exists = list.some((e: Entry) => e.id === preselectEntryId)
-          if (exists) setForm(prev => ({ ...prev, estate_entry_id: preselectEntryId }))
+        const qsId = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('entryId') || '') : ''
+        if (mounted && qsId && !form.estate_entry_id) {
+          const exists = list.some((e: Entry) => e.id === qsId)
+          if (exists) setForm(prev => ({ ...prev, estate_entry_id: qsId }))
         }
       } catch (e) {
         console.error(e)
@@ -86,7 +84,7 @@ export default function StockRegPage() {
     }
     run()
     return () => { mounted = false }
-  }, [supabase, preselectEntryId])
+  }, [supabase])
 
   // derived display values
   const derived = useMemo(() => {
