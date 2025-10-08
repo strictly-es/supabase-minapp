@@ -145,10 +145,7 @@ export default function StockDetailPage() {
               </dl>
             </section>
 
-            <section className="space-y-3">
-              <h3 className="font-semibold">予定共創事業者</h3>
-              <div className="text-sm text-gray-700">登録なし</div>
-            </section>
+            
 
             <section className="space-y-4">
               <h3 className="font-semibold">ファンド収支事業計画</h3>
@@ -178,4 +175,3 @@ export default function StockDetailPage() {
     </div>
   )
 }
-

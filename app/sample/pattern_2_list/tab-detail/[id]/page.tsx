@@ -139,8 +139,6 @@ export default function DetailPage() {
               <dl className="grid md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
                 <div><dt className="text-gray-500">団地名</dt><dd className="font-medium">{computed?.name ?? '-'}</dd></div>
                 <div><dt className="text-gray-500">所在地（都道府県/市/町村）</dt><dd>{computed?.addr || '-'}</dd></div>
-                <div><dt className="text-gray-500">最寄り駅（電車）</dt><dd>-</dd></div>
-                <div><dt className="text-gray-500">所要時間（徒歩・バス）</dt><dd>-</dd></div>
                 <div><dt className="text-gray-500">階数（入力）</dt><dd className="num">{row?.floor ?? '-'}</dd></div>
                 <div><dt className="text-gray-500">エレベーター有無</dt><dd>{row?.has_elevator === true ? '有' : row?.has_elevator === false ? '無' : '-'}</dd></div>
                 <div><dt className="text-gray-500">面積（㎡）</dt><dd className="num">{computed ? computed.area.toFixed(2) : '-'}</dd></div>
