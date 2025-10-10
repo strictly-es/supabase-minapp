@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabaseClient'
 
-type Pref = '' | '神奈川' | '東京' | '大阪'
+type Pref = '' | '兵庫' | '大阪'
 
 type FormState = {
   estate_name: string
@@ -177,8 +177,7 @@ export default function TabRegistPage() {
                   <label className="block">都道府県
                     <select name="pref" className="mt-1 w-full border rounded-lg px-3 py-2"
                       value={form.pref} onChange={onChange('pref')}>
-                      <option value="神奈川">神奈川</option>
-                      <option value="東京">東京</option>
+                      <option value="兵庫">兵庫</option>
                       <option value="大阪">大阪</option>
                       <option value="">選択</option>
                     </select>
@@ -231,12 +230,29 @@ export default function TabRegistPage() {
                       value={form.coef_total} onChange={onChange('coef_total')} />
                   </label>
                   <label className="block">内装レベル係数
-                    <input name="interior_level_coef" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.00"
-                      value={form.interior_level_coef} onChange={onChange('interior_level_coef')} />
+                    <select name="interior_level_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums"
+                      value={form.interior_level_coef} onChange={onChange('interior_level_coef')}>
+                      <option value="">選択</option>
+                      <option value="1.00">1.00</option>
+                      <option value="1.05">1.05</option>
+                      <option value="1.10">1.10</option>
+                      <option value="1.15">1.15</option>
+                      <option value="1.2">1.2</option>
+                      <option value="1.25">1.25</option>
+                      <option value="1.30">1.30</option>
+                    </select>
                   </label>
                   <label className="block">成約年数上乗せ係数
-                    <input name="contract_year_coef" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.00"
-                      value={form.contract_year_coef} onChange={onChange('contract_year_coef')} />
+                    <select name="contract_year_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums"
+                      value={form.contract_year_coef} onChange={onChange('contract_year_coef')}>
+                      <option value="">選択</option>
+                      <option value="0.00">1年未満(0.00)</option>
+                      <option value="0.02">1~2年前(0.02)</option>
+                      <option value="0.04">2~3年前(0.04)</option>
+                      <option value="0.06">3~5年前(0.06)</option>
+                      <option value="0.08">5年以上前(0.08)</option>
+                      <option value="0.1">10年以上前(0.1)</option>
+                    </select>
                   </label>
                   <label className="block">過去MIN価格
                     <input name="past_min" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="4800000"
