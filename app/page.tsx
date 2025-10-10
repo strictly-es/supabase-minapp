@@ -11,6 +11,12 @@ export default function Page() {
   const [password, setPassword] = useState<string>('')
   const [authMsg, setAuthMsg] = useState<string>('')
 
+  function toErrorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message
+    if (typeof e === 'string') return e
+    try { return JSON.stringify(e) } catch { return 'Unknown error' }
+  }
+
   // 認証済みなら一覧（カード）へリダイレクト
   useEffect(() => {
     supabase.auth.getSession()
@@ -41,8 +47,8 @@ export default function Page() {
         setAuthMsg('ログインしました')
         window.location.href = '/sample/pattern_2_list/tab-list'
       }
-    } catch (e: any) {
-      setAuthMsg('通信エラー: ' + (e?.message ?? String(e)))
+    } catch (e: unknown) {
+      setAuthMsg('通信エラー: ' + toErrorMessage(e))
     }
   }
 

@@ -84,7 +84,7 @@ export default function StockRegPage() {
     }
     run()
     return () => { mounted = false }
-  }, [supabase])
+  }, [supabase, form.estate_entry_id])
 
   // derived display values
   const derived = useMemo(() => {
