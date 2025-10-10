@@ -102,8 +102,7 @@ export default function DetailPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl bg-gray-900 text-white grid place-items-center font-bold">DX</div>
-            <h1 className="text-lg font-semibold">団地交渉DX（Pattern 2 統合案）</h1>
-            <span className="text-sm text-gray-500 hidden sm:inline">発見 → 理解 → 比較/整備 を単一UIで</span>
+            <h1 className="text-lg font-semibold">団地交渉DX（デモ）</h1>
           </div>
           <div className="flex items-center gap-2" />
         </div>
@@ -156,7 +155,6 @@ export default function DetailPage() {
                 <div><dt className="text-gray-500">内装レベル 係数</dt><dd className="num">{computed ? computed.interior.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">成約年数 上乗せ係数</dt><dd className="num">{computed ? computed.yearCoef.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">係数計</dt><dd className="num">{computed ? computed.coefSum.toFixed(2) : '-'}</dd></div>
-                <div><dt className="text-gray-500">備考</dt><dd className="text-gray-500">前提設定の変更は即時反映</dd></div>
               </dl>
             </section>
 
@@ -172,7 +170,7 @@ export default function DetailPage() {
                 <ul className="text-sm space-y-1">
                   {stocks.map((s) => (
                     <li key={s.id}>
-                      ・階数 {typeof s.floor === 'number' ? s.floor : '-'}、m²数 {typeof s.area_sqm === 'number' ? s.area_sqm.toFixed(2) : '-'} 、販売価格 {typeof s.list_price === 'number' ? yen(s.list_price) : '-'}
+                      {typeof s.floor === 'number' ? `${s.floor}階` : '-'}、{typeof s.area_sqm === 'number' ? `${s.area_sqm.toFixed(2)}m²` : '-'} 、販売価格 {typeof s.list_price === 'number' ? `${yen(s.list_price)}円` : '-'}
                       {' '}
                       <Link href={`/sample/pattern_2_list/tab-stock/${s.id}`} className="text-blue-600 underline">詳細</Link>
                     </li>
