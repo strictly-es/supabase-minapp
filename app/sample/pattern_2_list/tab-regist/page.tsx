@@ -144,16 +144,16 @@ export default function TabRegistPage() {
             <h1 className="text-lg font-semibold">団地交渉DX（Pattern 2 統合案）</h1>
             <span className="text-sm text-gray-500 hidden sm:inline">発見 → 理解 → 比較/整備 を単一UIで</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm" onClick={() => window.print()}>PDF出力</button>
-          </div>
+          <div className="flex items-center gap-2"></div>
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
-          <ul className="flex flex-wrap gap-2 text-sm">
+          <ul className="flex flex-wrap items-center gap-2 text-sm">
             <li>
               <Link href="/sample/pattern_2_list/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</Link>
             </li>
-            <li><button className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">登録</button></li>
+            <li>
+              <span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">登録</span>
+            </li>
           </ul>
         </nav>
       </header>

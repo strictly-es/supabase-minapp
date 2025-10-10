@@ -41,21 +41,7 @@ type Item = {
   hasElev: boolean | null
 }
 
-type SortableKey =
-  | 'id'
-  | 'name'
-  | 'walk'
-  | 'built'
-  | 'area'
-  | 'listPrice'
-  | 'unitPrice'
-  | 'coefTotal'
-  | 'targetClose'
-  | 'raise'
-  | 'buyTarget'
-  | 'pastMin'
-  | 'pastMax'
-  | 'pastMiniDays'
+// Table keys were used for table view; removed with table view
 
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
@@ -72,13 +58,10 @@ function sqm(n: number): string { return n.toFixed(2) + '㎡' }
 export default function TabListPage() {
   const supabase = getSupabase()
 
-  // View states
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  // View state: cards only
   type CardSortKey = 'unitPrice' | 'buyTarget' | 'pastMin' | 'targetClose' | 'raise' | 'pastMiniDays' | 'coefTotal'
   const [cardSortKey, setCardSortKey] = useState<CardSortKey>('unitPrice')
   const [cardSortAsc, setCardSortAsc] = useState<boolean>(true)
-  const [tableSortKey, setTableSortKey] = useState<SortableKey>('id')
-  const [tableSortAsc, setTableSortAsc] = useState<boolean>(true)
 
   // Filters
   const [fKey, setFKey] = useState<string>('')
@@ -220,30 +203,10 @@ export default function TabListPage() {
     return arr
   }, [filtered, cardSortKey, cardSortAsc])
 
-  // Table sorted
-  const tableSorted = useMemo(() => {
-    const arr = filtered.slice()
-    arr.sort((a, b) => {
-      const k: SortableKey = tableSortKey
-      const va = a[k] as Item[SortableKey]
-      const vb = b[k] as Item[SortableKey]
-      if (typeof va === 'string' || typeof vb === 'string') {
-        const r = String(va ?? '').localeCompare(String(vb ?? ''))
-        return tableSortAsc ? r : -r
-      }
-      const na = Number(va ?? 0)
-      const nb = Number(vb ?? 0)
-      const r = na - nb
-      return tableSortAsc ? r : -r
-    })
-    return arr
-  }, [filtered, tableSortKey, tableSortAsc])
-
   function setCardSort(k: CardSortKey) {
     if (cardSortKey === k) setCardSortAsc(!cardSortAsc)
     else { setCardSortKey(k); setCardSortAsc(true) }
   }
-  function setTableSort(k: SortableKey) { if (tableSortKey === k) setTableSortAsc(!tableSortAsc); else { setTableSortKey(k); setTableSortAsc(true) } }
 
   function judge(p: Item) {
     const diff = p.pastMin - p.buyTarget
@@ -285,10 +248,6 @@ export default function TabListPage() {
       <main className="max-w-7xl mx-auto p-4 space-y-6">
         <section id="tab-list" className="tab active">
           <div id="list-controls" className="mb-3 flex flex-wrap items-center gap-3">
-            <div id="mode-toggle" className="inline-flex rounded-lg overflow-hidden border">
-              <button id="mode-card" className={`px-3 py-1.5 text-sm ${viewMode==='card' ? 'bg-black text-white' : 'bg-white text-gray-700'}`} onClick={() => setViewMode('card')}>カード表示</button>
-              <button id="mode-table" className={`px-3 py-1.5 text-sm ${viewMode==='table' ? 'bg-black text-white' : 'bg-white text-gray-700'}`} onClick={() => setViewMode('table')}>表表示</button>
-            </div>
             <span className="text-sm text-gray-500">全<span id="countAll" className="num">{filtered.length}</span>件</span>
             <span className="flex-1"></span>
             <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
@@ -337,7 +296,7 @@ export default function TabListPage() {
             </aside>
 
             {/* Card List */}
-            <section id="listCards" className={`md:col-span-3 bg-white rounded-2xl shadow overflow-hidden ${viewMode==='card' ? '' : 'hidden'}`}>
+            <section id="listCards" className={`md:col-span-3 bg-white rounded-2xl shadow overflow-hidden`}>
               <div className="border-b p-4 flex items-center justify-between text-sm text-gray-600">
                 <div className="flex flex-wrap items-center gap-2">
                   <span>並び替え：</span>
@@ -395,56 +354,6 @@ export default function TabListPage() {
               </div>
             </section>
 
-            {/* Table List */}
-            <section id="listTable" className={`md:col-span-3 bg-white rounded-2xl shadow overflow-auto ${viewMode==='table' ? '' : 'hidden'}`}>
-              <div className="border-b p-3 text-sm text-gray-600">列ヘッダをクリックでソート</div>
-              <div className="p-3">
-                <table className="grid min-w-full text-sm text-left text-gray-800">
-                  <thead>
-                    <tr>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('id')}>NO</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('name')}>団地名</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold">所在地</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold">最寄</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('walk')}>徒歩</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('built')}>築年</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('area')}>面積(㎡)</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('listPrice')}>売出価格</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('unitPrice')}>単価(円/㎡)</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('coefTotal')}>係数計</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('targetClose')}>目標成約</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('raise')}>募集総額</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('buyTarget')}>買付目標</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('pastMin')}>過去MIN</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('pastMax')}>過去MAX</th>
-                      <th className="px-3 py-2 bg-gray-50 font-semibold sortable" onClick={()=>setTableSort('pastMiniDays')}>過去MINI日数</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableSorted.map((p) => (
-                      <tr key={p.id}>
-                        <td className="px-3 py-2">{p.id}</td>
-                        <td className="px-3 py-2">{p.name}</td>
-                        <td className="px-3 py-2">{p.addr1}</td>
-                        <td className="px-3 py-2">{p.station}</td>
-                        <td className="px-3 py-2 num">{p.walk ?? '-'}</td>
-                        <td className="px-3 py-2 num">{p.built ?? '-'}</td>
-                        <td className="px-3 py-2 num">{p.area.toFixed(2)}</td>
-                        <td className="px-3 py-2 num">{p.listPrice.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.unitPrice.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.coefTotal.toFixed(2)}</td>
-                        <td className="px-3 py-2 num">{p.targetClose.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.raise.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.buyTarget.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.pastMin.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.pastMax.toLocaleString('ja-JP')}</td>
-                        <td className="px-3 py-2 num">{p.pastMiniDays}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
           </div>
         </section>
       </main>
