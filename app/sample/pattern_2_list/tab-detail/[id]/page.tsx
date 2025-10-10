@@ -104,7 +104,12 @@ export default function DetailPage() {
             <div className="h-8 w-8 rounded-xl bg-gray-900 text-white grid place-items-center font-bold">DX</div>
             <h1 className="text-lg font-semibold">団地交渉DX（デモ）</h1>
           </div>
-          <div className="flex items-center gap-2" />
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-600">ログイン中: s.omura@enjoyworks.jp</span>
+            <button className="px-3 py-1.5 bg-gray-100 rounded-lg" onClick={() => { supabase.auth.signOut().then(() => { window.location.href = '/' }) }}>
+              サインアウト
+            </button>
+          </div>
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
