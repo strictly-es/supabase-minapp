@@ -90,6 +90,7 @@ export default function DetailPage() {
           .from('estate_stocks')
           .select('id, floor, area_sqm, list_price, registered_date')
           .eq('estate_entry_id', id)
+          .is('deleted_at', null)
           .order('registered_date', { ascending: false })
         if (sErr) throw sErr
         if (mounted) setStocks((sData ?? []) as Stock[])
@@ -211,6 +212,29 @@ export default function DetailPage() {
                       {typeof s.floor === 'number' ? `${s.floor}階` : '-'}、{typeof s.area_sqm === 'number' ? `${s.area_sqm.toFixed(2)}m²` : '-'} 、販売価格 {typeof s.list_price === 'number' ? `${yen(s.list_price)}円` : '-'}
                       {' '}
                       <Link href={`/sample/pattern_2_list/tab-stock/${s.id}`} className="text-blue-600 underline">詳細</Link>
+                      {' '}
+                      <Link href={`/sample/pattern_2_list/tab-stock/${s.id}/edit`} className="text-blue-600 underline">編集</Link>
+                      {' '}
+                      <button
+                        className="text-red-600 underline"
+                        onClick={async () => {
+                          if (!window.confirm('この在庫を削除します。よろしいですか？')) return
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser()
+                            const payload: Record<string, unknown> = { deleted_at: new Date().toISOString() }
+                            if (user?.id) payload.deleted_by = user.id
+                            const { error: delErr } = await supabase
+                              .from('estate_stocks')
+                              .update(payload)
+                              .eq('id', s.id)
+                            if (delErr) throw delErr
+                            setStocks(prev => prev.filter(p => p.id !== s.id))
+                          } catch (e) {
+                            console.error('[stock:delete:error]', e)
+                            setMsg('在庫の削除に失敗しました')
+                          }
+                        }}
+                      >削除</button>
                     </li>
                   ))}
                 </ul>
