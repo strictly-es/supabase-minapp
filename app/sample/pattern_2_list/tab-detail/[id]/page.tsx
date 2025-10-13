@@ -127,6 +127,13 @@ export default function DetailPage() {
                 <Link href="/sample/pattern_2_list/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
                 <h2 className="text-lg font-semibold">物件詳細</h2>
               </div>
+              <div className="flex items-center gap-2">
+                {id && (
+                  <Link href={`/sample/pattern_2_list/tab-detail/${id}/edit`} className="px-3 py-1.5 rounded-lg bg-black text-white text-sm">
+                    編集
+                  </Link>
+                )}
+              </div>
             </div>
 
             {/* KPI cards */}
