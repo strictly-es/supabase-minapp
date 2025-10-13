@@ -44,6 +44,29 @@ export default function DetailPage() {
   const [msg, setMsg] = useState<string>('')
   const [stocks, setStocks] = useState<Stock[]>([])
 
+  async function handleDelete() {
+    if (!id) return
+    const ok = window.confirm('この物件を削除します。よろしいですか？')
+    if (!ok) return
+    setMsg('削除中...')
+    try {
+      const { data: { user }, error: uerr } = await supabase.auth.getUser()
+      if (uerr) throw uerr
+      const payload: Record<string, unknown> = { deleted_at: new Date().toISOString() }
+      if (user?.id) payload.deleted_by = user.id
+      const { error } = await supabase
+        .from('estate_entries')
+        .update(payload)
+        .eq('id', id)
+      if (error) throw error
+      setMsg('削除しました。一覧へ移動します...')
+      window.location.href = '/sample/pattern_2_list/tab-list'
+    } catch (e) {
+      console.error('[detail:delete:error]', e)
+      setMsg('削除に失敗しました')
+    }
+  }
+
   useEffect(() => {
     let mounted = true
     async function run() {
@@ -133,6 +156,9 @@ export default function DetailPage() {
                     編集
                   </Link>
                 )}
+                <button onClick={() => { handleDelete().catch(console.error) }} className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm">
+                  削除
+                </button>
               </div>
             </div>
 

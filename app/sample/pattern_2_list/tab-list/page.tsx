@@ -91,6 +91,7 @@ export default function TabListPage() {
         const { data, error } = await supabase
           .from('estate_entries')
           .select('id, estate_name, addr1, addr2, max_price, area_sqm, coef_total, past_min, reins_registered_date, contract_date, floor, has_elevator')
+          .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(1000)
         if (error) throw error
