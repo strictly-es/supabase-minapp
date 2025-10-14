@@ -56,10 +56,7 @@ export default function TabRegistPage() {
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState('')
 
-  useMemo(() => {
-    // touch auth to ensure we show a helpful message on submit if needed
-    supabase.auth.getUser().catch(() => {})
-  }, [supabase])
+  useMemo(() => { supabase.auth.getUser().catch(() => {}) }, [supabase])
 
   const onChange = <K extends keyof FormState>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
@@ -73,7 +70,6 @@ export default function TabRegistPage() {
       const { data: { user }, error: uerr } = await supabase.auth.getUser()
       if (uerr) throw uerr
       if (!user) { setMsg('ログインが必要です'); setSubmitting(false); return }
-
       if (!form.estate_name.trim()) { setMsg('団地名は必須です'); setSubmitting(false); return }
 
       const toInt = (v: string): number | null => v.trim() === '' ? null : Number.parseInt(v, 10)
@@ -85,10 +81,7 @@ export default function TabRegistPage() {
       if (pdf) {
         const sanitizedName = pdf.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
         const path = `${user.id}/mysoku/${Date.now()}-${sanitizedName}`
-        const { error: upErr } = await supabase
-          .storage
-          .from('uploads')
-          .upload(path, pdf, { upsert: false, contentType: 'application/pdf' })
+        const { error: upErr } = await supabase.storage.from('uploads').upload(path, pdf, { upsert: false, contentType: 'application/pdf' })
         if (upErr) { setMsg('PDFアップロード失敗: ' + upErr.message); setSubmitting(false); return }
         mysoku_pdf_path = path
       }
@@ -113,33 +106,23 @@ export default function TabRegistPage() {
         past_min: toBigInt(form.past_min),
       }
 
-      const { error: insErr } = await supabase
-        .from('estate_entries')
-        .insert(payload)
-
+      const { error: insErr } = await supabase.from('estate_entries').insert(payload)
       if (insErr) { setMsg('DB保存失敗: ' + insErr.message); setSubmitting(false); return }
 
       setMsg('保存しました')
-      setForm({
-        estate_name: '', management: '', pref: '', addr1: '', addr2: '',
-        floor: '', elevator: '', reins_registered_date: '', contract_date: '',
-        max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '',
-      })
+      setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '' })
       setPdf(null)
       const f = document.getElementById('pdf') as HTMLInputElement | null
       if (f) f.value = ''
     } catch (e: unknown) {
       console.error('[regist:error]', e)
       setMsg('保存に失敗しました: ' + toErrorMessage(e))
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   return (
     <RequireAuth>
     <div className="bg-gray-50 text-gray-900 min-h-screen">
-      {/* Header + layout wrapper (match sample HTML) */}
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -155,18 +138,13 @@ export default function TabRegistPage() {
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap items-center gap-2 text-sm">
-            <li>
-              <Link href="/sample/pattern_2_list/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</Link>
-            </li>
-            <li>
-              <span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">登録</span>
-            </li>
+            <li><Link href="/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">一覧</Link></li>
+            <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">登録</span></li>
           </ul>
         </nav>
       </header>
 
       <main className="max-w-7xl mx-auto p-4 space-y-6">
-        {/* Tab: 登録（簡易版） */}
         <section id="tab-regist" className="tab active">
           <div className="bg-white rounded-2xl shadow p-5 space-y-6">
             <h2 className="text-lg font-semibold">登録（デモ）</h2>
@@ -175,12 +153,10 @@ export default function TabRegistPage() {
                 <h3 className="font-semibold">基本情報</h3>
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <label className="block">団地名
-                    <input name="estate_name" type="text" required className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）湘南パーク団地"
-                      value={form.estate_name} onChange={onChange('estate_name')} />
+                    <input name="estate_name" type="text" required className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）湘南パーク団地" value={form.estate_name} onChange={onChange('estate_name')} />
                   </label>
                   <label className="block">管理
-                    <select name="management" className="mt-1 w-full border rounded-lg px-3 py-2"
-                      value={form.management} onChange={onChange('management')}>
+                    <select name="management" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.management} onChange={onChange('management')}>
                       <option value="">選択</option>
                       <option value="一部委託">一部委託</option>
                       <option value="自主管理">自主管理</option>
@@ -188,28 +164,23 @@ export default function TabRegistPage() {
                     </select>
                   </label>
                   <label className="block">都道府県
-                    <select name="pref" className="mt-1 w-full border rounded-lg px-3 py-2"
-                      value={form.pref} onChange={onChange('pref')}>
+                    <select name="pref" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.pref} onChange={onChange('pref')}>
                       <option value="兵庫">兵庫</option>
                       <option value="大阪">大阪</option>
                       <option value="">選択</option>
                     </select>
                   </label>
                   <label className="block">所在地1
-                    <input name="addr1" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）藤沢市鵠沼神明"
-                      value={form.addr1} onChange={onChange('addr1')} />
+                    <input name="addr1" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）藤沢市鵠沼神明" value={form.addr1} onChange={onChange('addr1')} />
                   </label>
                   <label className="block md:col-span-2">所在地2
-                    <input name="addr2" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3-2-402"
-                      value={form.addr2} onChange={onChange('addr2')} />
+                    <input name="addr2" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3-2-402" value={form.addr2} onChange={onChange('addr2')} />
                   </label>
                   <label className="block md:col-span-2">PDF（過去成約事例の販売図面・マイソク）
-                    <input id="pdf" name="mysoku_pdf" type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white"
-                      onChange={(e) => setPdf(e.target.files?.[0] ?? null)} />
+                    <input id="pdf" name="mysoku_pdf" type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} />
                   </label>
                   <label className="block">階数（入力）
-                    <input name="floor" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="5"
-                      value={form.floor} onChange={onChange('floor')} />
+                    <input name="floor" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="5" value={form.floor} onChange={onChange('floor')} />
                   </label>
                   <label className="block">エレベーター有無
                     <select name="elevator" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.elevator} onChange={onChange('elevator')}>
@@ -230,21 +201,8 @@ export default function TabRegistPage() {
                   <label className="block">成約年月日
                     <input name="contract_date" type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.contract_date} onChange={onChange('contract_date')} />
                   </label>
-                  <label className="block">過去成約（MAX）
-                    <input name="max_price" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="19800000"
-                      value={form.max_price} onChange={onChange('max_price')} />
-                  </label>
-                  <label className="block">㎡数
-                    <input name="area_sqm" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="55.20"
-                      value={form.area_sqm} onChange={onChange('area_sqm')} />
-                  </label>
-                  <label className="block">係数
-                    <input name="coef_total" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="1.05"
-                      value={form.coef_total} onChange={onChange('coef_total')} />
-                  </label>
-                  <label className="block">内装レベル係数
-                    <select name="interior_level_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums"
-                      value={form.interior_level_coef} onChange={onChange('interior_level_coef')}>
+                  <label className="block">係数（合計）
+                    <select name="coef_total" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" value={form.coef_total} onChange={onChange('coef_total')}>
                       <option value="">選択</option>
                       <option value="1.00">1.00</option>
                       <option value="1.05">1.05</option>
@@ -255,9 +213,24 @@ export default function TabRegistPage() {
                       <option value="1.30">1.30</option>
                     </select>
                   </label>
+                  <label className="block">面積（㎡）
+                    <input name="area_sqm" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="68.32" value={form.area_sqm} onChange={onChange('area_sqm')} />
+                  </label>
+                  <label className="block">max price（円）
+                    <input name="max_price" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="12000000" value={form.max_price} onChange={onChange('max_price')} />
+                  </label>
+                  <label className="block">内装レベル係数
+                    <select name="interior_level_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" value={form.interior_level_coef} onChange={onChange('interior_level_coef')}>
+                      <option value="">選択</option>
+                      <option value="0.00">0.00</option>
+                      <option value="0.05">0.05</option>
+                      <option value="0.10">0.10</option>
+                      <option value="0.15">0.15</option>
+                      <option value="0.20">0.20</option>
+                    </select>
+                  </label>
                   <label className="block">成約年数上乗せ係数
-                    <select name="contract_year_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums"
-                      value={form.contract_year_coef} onChange={onChange('contract_year_coef')}>
+                    <select name="contract_year_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" value={form.contract_year_coef} onChange={onChange('contract_year_coef')}>
                       <option value="">選択</option>
                       <option value="0.00">1年未満(0.00)</option>
                       <option value="0.02">1~2年前(0.02)</option>
@@ -268,15 +241,13 @@ export default function TabRegistPage() {
                     </select>
                   </label>
                   <label className="block">過去MIN価格
-                    <input name="past_min" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="4800000"
-                      value={form.past_min} onChange={onChange('past_min')} />
+                    <input name="past_min" type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="4800000" value={form.past_min} onChange={onChange('past_min')} />
                   </label>
                 </div>
               </section>
 
               <div className="flex items-center justify-end gap-2">
-                <button type="reset" className="px-3 py-1.5 bg-gray-100 rounded-lg" disabled={submitting}
-                  onClick={() => { setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '', }); setPdf(null); setMsg(''); }}>
+                <button type="reset" className="px-3 py-1.5 bg-gray-100 rounded-lg" disabled={submitting} onClick={() => { setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '', }); setPdf(null); setMsg(''); }}>
                   リセット
                 </button>
                 <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg" disabled={submitting}>登録（デモ）</button>
@@ -294,3 +265,4 @@ export default function TabRegistPage() {
     </RequireAuth>
   )
 }
+

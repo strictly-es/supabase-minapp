@@ -61,10 +61,7 @@ export default function StockEditPage() {
   const stockId = params?.stockId as string | undefined
 
   const [row, setRow] = useState<Stock | null>(null)
-  const [form, setForm] = useState<FormState>({
-    floor: '', area_sqm: '', list_price: '', registered_date: '',
-    broker_name: '', broker_pref: '', broker_city: '', broker_town: '', broker_tel: '', broker_person: '', broker_mobile: '', broker_email: '', broker_mysoku_url: '', broker_photo_url: '', fundplan_url: '', status: '問い合わせ'
-  })
+  const [form, setForm] = useState<FormState>({ floor: '', area_sqm: '', list_price: '', registered_date: '', broker_name: '', broker_pref: '', broker_city: '', broker_town: '', broker_tel: '', broker_person: '', broker_mobile: '', broker_email: '', broker_mysoku_url: '', broker_photo_url: '', fundplan_url: '', status: '問い合わせ' })
   const [pdf, setPdf] = useState<File | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [msg, setMsg] = useState<string>('')
@@ -86,107 +83,34 @@ export default function StockEditPage() {
         if (mounted) {
           setRow(s)
           if (s) {
-            setForm({
-              floor: (typeof s.floor === 'number' ? String(s.floor) : ''),
-              area_sqm: (typeof s.area_sqm === 'number' ? String(s.area_sqm) : ''),
-              list_price: (typeof s.list_price === 'number' ? String(s.list_price) : ''),
-              registered_date: s.registered_date ?? '',
-              broker_name: s.broker_name ?? '',
-              broker_pref: s.broker_pref ?? '',
-              broker_city: s.broker_city ?? '',
-              broker_town: s.broker_town ?? '',
-              broker_tel: s.broker_tel ?? '',
-              broker_person: s.broker_person ?? '',
-              broker_mobile: s.broker_mobile ?? '',
-              broker_email: s.broker_email ?? '',
-              broker_mysoku_url: s.broker_mysoku_url ?? '',
-              broker_photo_url: s.broker_photo_url ?? '',
-              fundplan_url: s.fundplan_url ?? '',
-              status: (s.status as FormState['status']) || '問い合わせ',
-            })
-            if (s.stock_mysoku_path) {
-              const { data: signed } = await supabase.storage.from('uploads').createSignedUrl(s.stock_mysoku_path, 600)
-              if (mounted) setSignedUrl(signed?.signedUrl ?? null)
-            }
+            setForm({ floor: (typeof s.floor === 'number' ? String(s.floor) : ''), area_sqm: (typeof s.area_sqm === 'number' ? String(s.area_sqm) : ''), list_price: (typeof s.list_price === 'number' ? String(s.list_price) : ''), registered_date: s.registered_date ?? '', broker_name: s.broker_name ?? '', broker_pref: s.broker_pref ?? '', broker_city: s.broker_city ?? '', broker_town: s.broker_town ?? '', broker_tel: s.broker_tel ?? '', broker_person: s.broker_person ?? '', broker_mobile: s.broker_mobile ?? '', broker_email: s.broker_email ?? '', broker_mysoku_url: s.broker_mysoku_url ?? '', broker_photo_url: s.broker_photo_url ?? '', fundplan_url: s.fundplan_url ?? '', status: (s.status as FormState['status']) || '問い合わせ' })
+            if (s.stock_mysoku_path) { const { data: signed } = await supabase.storage.from('uploads').createSignedUrl(s.stock_mysoku_path, 600); if (mounted) setSignedUrl(signed?.signedUrl ?? null) }
           }
         }
-      } catch (e) {
-        console.error('[stock:edit:load]', e)
-        if (mounted) setMsg('読み込みに失敗しました: ' + toErrorMessage(e))
-      } finally {
-        if (mounted) setLoading(false)
-      }
+      } catch (e) { console.error('[stock:edit:load]', e); if (mounted) setMsg('読み込みに失敗しました: ' + toErrorMessage(e)) } finally { if (mounted) setLoading(false) }
     }
-    run()
-    return () => { mounted = false }
+    run(); return () => { mounted = false }
   }, [supabase, stockId])
 
-  const onChange = <K extends keyof FormState>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [key]: e.target.value as FormState[K] }))
-  }
+  const onChange = <K extends keyof FormState>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setForm(prev => ({ ...prev, [key]: e.target.value as FormState[K] })) }
 
-  const derived = useMemo(() => {
-    const area = parseFloat(form.area_sqm || '0')
-    const price = parseFloat(form.list_price || '0')
-    const unit = isFinite(area) && area > 0 && isFinite(price) ? Math.round(price / area) : NaN
-    return { unit }
-  }, [form.area_sqm, form.list_price])
+  const derived = useMemo(() => { const area = parseFloat(form.area_sqm || '0'); const price = parseFloat(form.list_price || '0'); const unit = isFinite(area) && area > 0 && isFinite(price) ? Math.round(price / area) : NaN; return { unit } }, [form.area_sqm, form.list_price])
 
   async function handleSubmit(ev: React.FormEvent<HTMLFormElement>) {
-    ev.preventDefault()
-    if (!stockId) return
-    setMsg('更新中...')
+    ev.preventDefault(); if (!stockId) return; setMsg('更新中...')
     try {
-      const { data: { user }, error: uerr } = await supabase.auth.getUser()
-      if (uerr) throw uerr
-      if (!user) { setMsg('ログインが必要です'); return }
-
+      const { data: { user }, error: uerr } = await supabase.auth.getUser(); if (uerr) throw uerr; if (!user) { setMsg('ログインが必要です'); return }
       const toInt = (v: string): number | null => v.trim() === '' ? null : Number.parseInt(v, 10)
       const toNum = (v: string): number | null => v.trim() === '' ? null : Number.parseFloat(v)
-
       let stock_mysoku_path: string | null | undefined = undefined
-      if (pdf) {
-        const sanitized = pdf.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
-        const path = `${user.id}/stock/${Date.now()}-${sanitized}`
-        const { error: upErr } = await supabase.storage.from('uploads').upload(path, pdf, { upsert: false, contentType: 'application/pdf' })
-        if (upErr) { setMsg('PDFアップロード失敗: ' + upErr.message); return }
-        stock_mysoku_path = path
-      }
-
-      const payload: Record<string, unknown> = {
-        floor: toInt(form.floor),
-        area_sqm: toNum(form.area_sqm),
-        list_price: toInt(form.list_price),
-        registered_date: form.registered_date || null,
-        broker_name: form.broker_name || null,
-        broker_pref: form.broker_pref || null,
-        broker_city: form.broker_city || null,
-        broker_town: form.broker_town || null,
-        broker_tel: form.broker_tel || null,
-        broker_person: form.broker_person || null,
-        broker_mobile: form.broker_mobile || null,
-        broker_email: form.broker_email || null,
-        broker_mysoku_url: form.broker_mysoku_url || null,
-        broker_photo_url: form.broker_photo_url || null,
-        fundplan_url: form.fundplan_url || null,
-        status: form.status,
-      }
+      if (pdf) { const sanitized = pdf.name.replace(/[^a-zA-Z0-9_.-]/g, '_'); const path = `${user.id}/stock/${Date.now()}-${sanitized}`; const { error: upErr } = await supabase.storage.from('uploads').upload(path, pdf, { upsert: false, contentType: 'application/pdf' }); if (upErr) { setMsg('PDFアップロード失敗: ' + upErr.message); return } stock_mysoku_path = path }
+      const payload: Record<string, unknown> = { floor: toInt(form.floor), area_sqm: toNum(form.area_sqm), list_price: toInt(form.list_price), registered_date: form.registered_date || null, broker_name: form.broker_name || null, broker_pref: form.broker_pref || null, broker_city: form.broker_city || null, broker_town: form.broker_town || null, broker_tel: form.broker_tel || null, broker_person: form.broker_person || null, broker_mobile: form.broker_mobile || null, broker_email: form.broker_email || null, broker_mysoku_url: form.broker_mysoku_url || null, broker_photo_url: form.broker_photo_url || null, fundplan_url: form.fundplan_url || null, status: form.status }
       if (typeof stock_mysoku_path !== 'undefined') payload.stock_mysoku_path = stock_mysoku_path
-
-      const { error: upErr } = await supabase
-        .from('estate_stocks')
-        .update(payload)
-        .eq('id', stockId)
-
+      const { error: upErr } = await supabase.from('estate_stocks').update(payload).eq('id', stockId)
       if (upErr) { setMsg('DB更新失敗: ' + upErr.message); return }
-
       setMsg('更新しました。詳細に戻ります...')
-      if (row?.estate_entry_id) router.push(`/sample/pattern_2_list/tab-detail/${row.estate_entry_id}`)
-      else router.push('/sample/pattern_2_list/tab-list')
-    } catch (e) {
-      console.error('[stock:edit:update]', e)
-      setMsg('更新に失敗しました: ' + toErrorMessage(e))
-    }
+      if (row?.estate_entry_id) router.push(`/tab-detail/${row.estate_entry_id}`); else router.push('/tab-list')
+    } catch (e) { console.error('[stock:edit:update]', e); setMsg('更新に失敗しました: ' + toErrorMessage(e)) }
   }
 
   return (
@@ -207,9 +131,7 @@ export default function StockEditPage() {
         </div>
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
-            {row?.estate_entry_id && (
-              <li><Link href={`/sample/pattern_2_list/tab-detail/${row.estate_entry_id}`} className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</Link></li>
-            )}
+            {row?.estate_entry_id && (<li><Link href={`/tab-detail/${row.estate_entry_id}`} className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</Link></li>)}
             <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">在庫編集</span></li>
           </ul>
         </nav>
@@ -218,36 +140,29 @@ export default function StockEditPage() {
       <main className="max-w-7xl mx-auto p-4">
         <div className="bg-white rounded-2xl shadow p-5 space-y-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items中心 gap-3">
               {row?.estate_entry_id ? (
-                <Link href={`/sample/pattern_2_list/tab-detail/${row.estate_entry_id}`} className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 戻る</Link>
+                <Link href={`/tab-detail/${row.estate_entry_id}`} className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 戻る</Link>
               ) : (
-                <Link href="/sample/pattern_2_list/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
+                <Link href="/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
               )}
               <h2 className="text-lg font-semibold">在庫編集</h2>
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-sm text-gray-500">読み込み中...</p>
-          ) : !row ? (
-            <p className="text-sm text-red-600">データが見つかりませんでした</p>
-          ) : (
+          {loading ? (<p className="text-sm text-gray-500">読み込み中...</p>) : !row ? (<p className="text-sm text-red-600">データが見つかりませんでした</p>) : (
             <form onSubmit={(e) => { handleSubmit(e).catch(console.error) }} className="space-y-6">
               <section className="space-y-4">
                 <h3 className="font-semibold">物件情報</h3>
                 <div className="grid md:grid-cols-3 gap-4 text-sm">
                   <label className="block">階数（入力）
-                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="5"
-                      value={form.floor} onChange={onChange('floor')} />
+                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="5" value={form.floor} onChange={onChange('floor')} />
                   </label>
                   <label className="block">m²数
-                    <input type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="55.20"
-                      value={form.area_sqm} onChange={onChange('area_sqm')} />
+                    <input type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="55.20" value={form.area_sqm} onChange={onChange('area_sqm')} />
                   </label>
                   <label className="block">販売価格
-                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="12800000"
-                      value={form.list_price} onChange={onChange('list_price')} required />
+                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="12800000" value={form.list_price} onChange={onChange('list_price')} required />
                   </label>
                   <div className="block"><div className="text-gray-500">m²単価</div><div className="mt-1 font-semibold tabular-nums">{isNaN(derived.unit) ? '-' : `${derived.unit.toLocaleString('ja-JP')} 円/㎡`}</div></div>
                   <label className="block">登録年月日
@@ -296,11 +211,7 @@ export default function StockEditPage() {
               </section>
 
               <div className="flex items-center justify-end gap-2">
-                {row?.estate_entry_id ? (
-                  <Link href={`/sample/pattern_2_list/tab-detail/${row.estate_entry_id}`} className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm">キャンセル</Link>
-                ) : (
-                  <Link href="/sample/pattern_2_list/tab-list" className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm">キャンセル</Link>
-                )}
+                {row?.estate_entry_id ? (<Link href={`/tab-detail/${row.estate_entry_id}`} className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm">キャンセル</Link>) : (<Link href="/tab-list" className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm">キャンセル</Link>)}
                 <button type="submit" className="px-3 py-1.5 rounded-lg bg-black text-white text-sm">保存</button>
               </div>
               <p className="text-xs text-gray-600">{msg}</p>
@@ -315,3 +226,4 @@ export default function StockEditPage() {
     </RequireAuth>
   )
 }
+

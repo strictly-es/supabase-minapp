@@ -193,7 +193,7 @@ export default function EditEntryPage() {
       if (upErr) { setMsg('DB更新失敗: ' + upErr.message); return }
 
       setMsg('更新しました。詳細へ戻ります...')
-      router.push(`/sample/pattern_2_list/tab-detail/${id}`)
+      router.push(`/tab-detail/${id}`)
     } catch (e) {
       console.error('[edit:update:error]', e)
       setMsg('更新に失敗しました: ' + toErrorMessage(e))
@@ -220,7 +220,7 @@ export default function EditEntryPage() {
           <ul className="flex flex-wrap items-center gap-2 text-sm">
             <li>
               {id ? (
-                <Link href={`/sample/pattern_2_list/tab-detail/${id}`} className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</Link>
+                <Link href={`/tab-detail/${id}`} className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</Link>
               ) : (
                 <span className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">詳細</span>
               )}
@@ -237,7 +237,7 @@ export default function EditEntryPage() {
           <div className="bg-white rounded-2xl shadow p-5 space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Link href={id ? `/sample/pattern_2_list/tab-detail/${id}` : '/sample/pattern_2_list/tab-list'} className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 戻る</Link>
+                <Link href={id ? `/tab-detail/${id}` : '/tab-list'} className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 戻る</Link>
                 <h2 className="text-lg font-semibold">物件編集</h2>
               </div>
             </div>
@@ -370,7 +370,7 @@ export default function EditEntryPage() {
                 </section>
 
                 <div className="flex items-center justify-end gap-2">
-                  <Link href={id ? `/sample/pattern_2_list/tab-detail/${id}` : '/sample/pattern_2_list/tab-list'} className="px-3 py-1.5 bg-gray-100 rounded-lg">キャンセル</Link>
+                  <Link href={id ? `/tab-detail/${id}` : '/tab-list'} className="px-3 py-1.5 bg-gray-100 rounded-lg">キャンセル</Link>
                   <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg">保存</button>
                 </div>
                 <p className="text-xs text-gray-600">{msg}</p>
@@ -383,3 +383,4 @@ export default function EditEntryPage() {
     </RequireAuth>
   )
 }
+

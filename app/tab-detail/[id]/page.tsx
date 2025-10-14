@@ -63,7 +63,7 @@ export default function DetailPage() {
         .eq('id', id)
       if (error) throw error
       setMsg('削除しました。一覧へ移動します...')
-      window.location.href = '/sample/pattern_2_list/tab-list'
+      window.location.href = '/tab-list'
     } catch (e) {
       console.error('[detail:delete:error]', e)
       setMsg('削除に失敗しました')
@@ -142,7 +142,7 @@ export default function DetailPage() {
         <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
           <ul className="flex flex-wrap gap-2 text-sm">
             <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">詳細</span></li>
-            <li><Link href="/sample/pattern_2_list/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">登録</Link></li>
+            <li><Link href="/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">登録</Link></li>
           </ul>
         </nav>
       </header>
@@ -152,12 +152,12 @@ export default function DetailPage() {
           <div className="bg-white rounded-2xl shadow p-5 space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Link href="/sample/pattern_2_list/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
+                <Link href="/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
                 <h2 className="text-lg font-semibold">物件詳細</h2>
               </div>
               <div className="flex items-center gap-2">
                 {id && (
-                  <Link href={`/sample/pattern_2_list/tab-detail/${id}/edit`} className="px-3 py-1.5 rounded-lg bg-black text-white text-sm">
+                  <Link href={`/tab-detail/${id}/edit`} className="px-3 py-1.5 rounded-lg bg-black text-white text-sm">
                     編集
                   </Link>
                 )}
@@ -206,7 +206,7 @@ export default function DetailPage() {
             <section className="rounded-2xl border border-gray-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">現在販売中の在庫物件</h3>
-                <Link href={`/sample/pattern_2_list/tab-stock-reg?entryId=${id ?? ''}`} className="px-2 py-1 rounded bg-gray-100 text-sm">在庫登録</Link>
+                <Link href={`/tab-stock-reg?entryId=${id ?? ''}`} className="px-2 py-1 rounded bg-gray-100 text-sm">在庫登録</Link>
               </div>
               {stocks.length === 0 ? (
                 <p className="text-sm text-gray-500">現在販売中の在庫はありません</p>
@@ -216,9 +216,9 @@ export default function DetailPage() {
                     <li key={s.id}>
                       {typeof s.floor === 'number' ? `${s.floor}階` : '-'}、{typeof s.area_sqm === 'number' ? `${s.area_sqm.toFixed(2)}m²` : '-'} 、販売価格 {typeof s.list_price === 'number' ? `${yen(s.list_price)}円` : '-'}
                       {' '}
-                      <Link href={`/sample/pattern_2_list/tab-stock/${s.id}`} className="text-blue-600 underline">詳細</Link>
+                      <Link href={`/tab-stock/${s.id}`} className="text-blue-600 underline">詳細</Link>
                       {' '}
-                      <Link href={`/sample/pattern_2_list/tab-stock/${s.id}/edit`} className="text-blue-600 underline">編集</Link>
+                      <Link href={`/tab-stock/${s.id}/edit`} className="text-blue-600 underline">編集</Link>
                       {' '}
                       <button
                         className="text-red-600 underline"
@@ -259,3 +259,4 @@ export default function DetailPage() {
     </RequireAuth>
   )
 }
+

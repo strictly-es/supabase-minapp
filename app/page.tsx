@@ -22,12 +22,12 @@ export default function Page() {
     supabase.auth.getSession()
       .then(({ data }) => {
         const u = data.session?.user ?? null
-        if (u) window.location.href = '/sample/pattern_2_list/tab-list'
+        if (u) window.location.href = '/tab-list'
       })
       .catch(() => {})
 
     const onChange = (_event: AuthChangeEvent, session: Session | null): void => {
-      if (session?.user) window.location.href = '/sample/pattern_2_list/tab-list'
+      if (session?.user) window.location.href = '/tab-list'
     }
     const { data: listener } = supabase.auth.onAuthStateChange(onChange)
     return () => { listener?.subscription.unsubscribe() }
@@ -45,7 +45,7 @@ export default function Page() {
         setAuthMsg('エラー: ' + error.message)
       } else {
         setAuthMsg('ログインしました')
-        window.location.href = '/sample/pattern_2_list/tab-list'
+        window.location.href = '/tab-list'
       }
     } catch (e: unknown) {
       setAuthMsg('通信エラー: ' + toErrorMessage(e))
