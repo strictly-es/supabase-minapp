@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import RequireAuth from '@/components/RequireAuth'
+import UserEmail from '@/components/UserEmail'
 
 type Entry = { id: string; estate_name: string | null; past_min: number | null }
 
@@ -180,6 +182,7 @@ export default function StockRegPage() {
   }
 
   return (
+    <RequireAuth>
     <div className="bg-gray-50 text-gray-900 min-h-screen">
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -188,7 +191,7 @@ export default function StockRegPage() {
             <h1 className="text-lg font-semibold">団地交渉DX（デモ）</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">ログイン中: s.omura@enjoyworks.jp</span>
+            <UserEmail />
             <button className="px-3 py-1.5 bg-gray-100 rounded-lg" onClick={() => { supabase.auth.signOut().then(() => { window.location.href = '/' }) }}>
               サインアウト
             </button>
@@ -287,5 +290,6 @@ export default function StockRegPage() {
         .tabular-nums { font-variant-numeric: tabular-nums; }
       `}</style>
     </div>
+    </RequireAuth>
   )
 }

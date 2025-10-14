@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabaseClient'
+import RequireAuth from '@/components/RequireAuth'
+import UserEmail from '@/components/UserEmail'
 
 type Row = {
   id: string
@@ -224,6 +226,7 @@ export default function TabListPage() {
   }
 
   return (
+    <RequireAuth>
     <div className="bg-gray-50 text-gray-900 min-h-screen">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50">
@@ -233,7 +236,7 @@ export default function TabListPage() {
             <h1 className="text-lg font-semibold">団地交渉DX（デモ）</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">ログイン中: s.omura@enjoyworks.jp</span>
+            <UserEmail />
             <button className="px-3 py-1.5 bg-gray-100 rounded-lg" onClick={() => { supabase.auth.signOut().then(() => { window.location.href = '/' }) }}>
               サインアウト
             </button>
@@ -379,5 +382,6 @@ export default function TabListPage() {
         .sort-ind { font-size: 11px; color:#6b7280; margin-left:.25rem; }
       `}</style>
     </div>
+    </RequireAuth>
   )
 }
