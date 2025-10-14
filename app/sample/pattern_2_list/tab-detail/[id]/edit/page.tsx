@@ -256,8 +256,13 @@ export default function EditEntryPage() {
                         value={form.estate_name} onChange={onChange('estate_name')} />
                     </label>
                     <label className="block">管理
-                      <input name="management" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）全部委託/自主管理"
-                        value={form.management} onChange={onChange('management')} />
+                      <select name="management" className="mt-1 w-full border rounded-lg px-3 py-2"
+                        value={form.management} onChange={onChange('management')}>
+                        <option value="">選択</option>
+                        <option value="一部委託">一部委託</option>
+                        <option value="自主管理">自主管理</option>
+                        <option value="全部委託">全部委託</option>
+                      </select>
                     </label>
                     <label className="block">都道府県
                       <select name="pref" className="mt-1 w-full border rounded-lg px-3 py-2"

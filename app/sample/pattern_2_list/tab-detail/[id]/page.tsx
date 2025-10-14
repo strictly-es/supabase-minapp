@@ -10,6 +10,7 @@ import RequireAuth from '@/components/RequireAuth'
 type Row = {
   id: string
   estate_name: string | null
+  management: string | null
   addr1: string | null
   addr2: string | null
   max_price: number | null
@@ -76,7 +77,7 @@ export default function DetailPage() {
       try {
         const { data, error } = await supabase
           .from('estate_entries')
-          .select('id, estate_name, addr1, addr2, max_price, area_sqm, coef_total, past_min, reins_registered_date, contract_date, floor, has_elevator, mysoku_pdf_path, interior_level_coef, contract_year_coef')
+          .select('id, estate_name, management, addr1, addr2, max_price, area_sqm, coef_total, past_min, reins_registered_date, contract_date, floor, has_elevator, mysoku_pdf_path, interior_level_coef, contract_year_coef')
           .eq('id', id)
           .maybeSingle()
         if (error) throw error
@@ -176,10 +177,11 @@ export default function DetailPage() {
 
             {/* 詳細（拡張） */}
             <section className="rounded-2xl border border-gray-200 p-5 space-y-4">
-              <h3 className="font-semibold">詳細（拡張）</h3>
+              <h3 className="font-semibold">詳細</h3>
               <dl className="grid md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
                 <div><dt className="text-gray-500">団地名</dt><dd className="font-medium">{computed?.name ?? '-'}</dd></div>
                 <div><dt className="text-gray-500">所在地（都道府県/市/町村）</dt><dd>{computed?.addr || '-'}</dd></div>
+                <div><dt className="text-gray-500">管理</dt><dd>{row?.management || '-'}</dd></div>
                 <div><dt className="text-gray-500">階数（入力）</dt><dd className="num">{row?.floor ?? '-'}</dd></div>
                 <div><dt className="text-gray-500">エレベーター有無</dt><dd>{row?.has_elevator === true ? '有' : row?.has_elevator === false ? '無' : '-'}</dd></div>
                 <div><dt className="text-gray-500">面積（㎡）</dt><dd className="num">{computed ? computed.area.toFixed(2) : '-'}</dd></div>
