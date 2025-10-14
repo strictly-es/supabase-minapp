@@ -198,7 +198,7 @@ export default function DetailPage() {
               <dl className="grid md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
                 <div><dt className="text-gray-500">内装レベル 係数</dt><dd className="num">{computed ? computed.interior.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">成約年数 上乗せ係数</dt><dd className="num">{computed ? computed.yearCoef.toFixed(2) : '-'}</dd></div>
-                <div><dt className="text-gray-500">係数計</dt><dd className="num">{computed ? computed.coefSum.toFixed(2) : '-'}</dd></div>
+                <div><dt className="text-gray-500">係数計</dt><dd className="num">{typeof row?.coef_total === 'number' ? row.coef_total.toFixed(2) : '-'}</dd></div>
               </dl>
             </section>
 
@@ -259,4 +259,3 @@ export default function DetailPage() {
     </RequireAuth>
   )
 }
-

@@ -86,6 +86,8 @@ export default function TabRegistPage() {
         mysoku_pdf_path = path
       }
 
+      const interior = toNum(form.interior_level_coef) ?? 0
+      const year = toNum(form.contract_year_coef) ?? 0
       const payload = {
         created_by: user.id,
         estate_name: form.estate_name.trim(),
@@ -100,7 +102,7 @@ export default function TabRegistPage() {
         contract_date: form.contract_date || null,
         max_price: toBigInt(form.max_price),
         area_sqm: toNum(form.area_sqm),
-        coef_total: toNum(form.coef_total),
+        coef_total: interior + year,
         interior_level_coef: toNum(form.interior_level_coef),
         contract_year_coef: toNum(form.contract_year_coef),
         past_min: toBigInt(form.past_min),
@@ -201,18 +203,7 @@ export default function TabRegistPage() {
                   <label className="block">成約年月日
                     <input name="contract_date" type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.contract_date} onChange={onChange('contract_date')} />
                   </label>
-                  <label className="block">係数（合計）
-                    <select name="coef_total" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" value={form.coef_total} onChange={onChange('coef_total')}>
-                      <option value="">選択</option>
-                      <option value="1.00">1.00</option>
-                      <option value="1.05">1.05</option>
-                      <option value="1.10">1.10</option>
-                      <option value="1.15">1.15</option>
-                      <option value="1.2">1.2</option>
-                      <option value="1.25">1.25</option>
-                      <option value="1.30">1.30</option>
-                    </select>
-                  </label>
+                  
                   <label className="block">面積（㎡）
                     <input name="area_sqm" type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" placeholder="68.32" value={form.area_sqm} onChange={onChange('area_sqm')} />
                   </label>
@@ -222,11 +213,11 @@ export default function TabRegistPage() {
                   <label className="block">内装レベル係数
                     <select name="interior_level_coef" className="mt-1 w-full border rounded-lg px-3 py-2 tabular-nums" value={form.interior_level_coef} onChange={onChange('interior_level_coef')}>
                       <option value="">選択</option>
-                      <option value="0.00">0.00</option>
-                      <option value="0.05">0.05</option>
-                      <option value="0.10">0.10</option>
-                      <option value="0.15">0.15</option>
-                      <option value="0.20">0.20</option>
+                      <option value="1.00">1.00</option>
+                      <option value="1.05">1.05</option>
+                      <option value="1.10">1.10</option>
+                      <option value="1.15">1.15</option>
+                      <option value="1.20">1.20</option>
                     </select>
                   </label>
                   <label className="block">成約年数上乗せ係数
@@ -265,4 +256,3 @@ export default function TabRegistPage() {
     </RequireAuth>
   )
 }
-
