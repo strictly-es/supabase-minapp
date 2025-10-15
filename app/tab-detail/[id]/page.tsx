@@ -120,7 +120,12 @@ export default function DetailPage() {
     const interior = safeNum(row.interior_level_coef, 0)
     const yearCoef = safeNum(row.contract_year_coef, 0)
     const coefSum = interior + yearCoef
-    return { name, addr, area, unit, targetClose, raise, pastMin, interior, yearCoef, coefSum }
+    // 買付目標額（一覧の計算式に合わせる）
+    const moveCost = area < 60 ? Math.round(area * 132000) : (area >= 80 ? Math.round(area * 123000) : Math.round(area * (132000 - (area - 60) * 400)))
+    const brokerage = raise < 10_000_000 ? 550_000 : Math.round(raise * 0.055)
+    const other = Math.round(raise * 0.075)
+    const buyTarget = raise - moveCost - brokerage - other
+    return { name, addr, area, unit, targetClose, raise, pastMin, interior, yearCoef, coefSum, buyTarget }
   }, [row])
 
   return (
@@ -168,11 +173,12 @@ export default function DetailPage() {
             </div>
 
             {/* KPI cards */}
-            <section className="grid md:grid-cols-4 gap-3">
+            <section className="grid md:grid-cols-5 gap-3">
               <div className="rounded-2xl bg-lime-50 p-4"><div className="text-xs text-gray-500">㎡単価</div><div className="text-2xl font-semibold"><span className="num">{computed ? yen(computed.unit) : '-'}</span><span className="text-sm"> 円/㎡</span></div></div>
               <div className="rounded-2xl bg-indigo-50 p-4"><div className="text-xs text-gray-500">目標成約価格</div><div className="text-2xl font-semibold"><span className="num">{computed ? yen(computed.targetClose) : '-'}</span><span className="text-sm"> 円</span></div></div>
               <div className="rounded-2xl bg-amber-50 p-4"><div className="text-xs text-gray-500">募集総額</div><div className="text-2xl font-semibold"><span className="num">{computed ? yen(computed.raise) : '-'}</span><span className="text-sm"> 円</span></div></div>
               <div className="rounded-2xl bg-rose-50 p-4"><div className="text-xs text-gray-500">過去MIN（令和）</div><div className="text-2xl font-semibold"><span className="num">{computed ? yen(computed.pastMin) : '-'}</span><span className="text-sm"> 円</span></div></div>
+              <div className="rounded-2xl bg-emerald-50 p-4"><div className="text-xs text-gray-500">買付目標額</div><div className="text-2xl font-semibold"><span className="num">{computed ? yen(computed.buyTarget) : '-'}</span><span className="text-sm"> 円</span></div></div>
             </section>
 
             {/* 詳細（拡張） */}
@@ -199,6 +205,21 @@ export default function DetailPage() {
                 <div><dt className="text-gray-500">内装レベル 係数</dt><dd className="num">{computed ? computed.interior.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">成約年数 上乗せ係数</dt><dd className="num">{computed ? computed.yearCoef.toFixed(2) : '-'}</dd></div>
                 <div><dt className="text-gray-500">係数計</dt><dd className="num">{typeof row?.coef_total === 'number' ? row.coef_total.toFixed(2) : '-'}</dd></div>
+              </dl>
+            </section>
+
+            {/* 買付目標額（参考） */}
+            <section className="rounded-2xl border border-gray-200 p-5 space-y-4">
+              <h3 className="font-semibold">買付目標額（参考）</h3>
+              <dl className="grid md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                <div>
+                  <dt className="text-gray-500">買付目標額 × 0.9</dt>
+                  <dd className="num">{computed ? yen(Math.round(computed.buyTarget * 0.9)) : '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">買付目標額 × 1.25</dt>
+                  <dd className="num">{computed ? yen(Math.round(computed.buyTarget * 1.25)) : '-'}</dd>
+                </div>
               </dl>
             </section>
 
