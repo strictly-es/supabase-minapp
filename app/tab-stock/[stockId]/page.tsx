@@ -49,8 +49,8 @@ export default function StockDetailPage() {
     try {
       const { data: { user }, error: uerr } = await supabase.auth.getUser()
       if (uerr) throw uerr
-      const payload: Record<string, unknown> = { deleted_at: new Date().toISOString() }
-      if (user?.id) (payload as any).deleted_by = user.id
+      const payload: { deleted_at: string; deleted_by?: string } = { deleted_at: new Date().toISOString() }
+      if (user?.id) payload.deleted_by = user.id
       const { error } = await supabase
         .from('estate_stocks')
         .update(payload)
