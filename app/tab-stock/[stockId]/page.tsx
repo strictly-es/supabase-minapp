@@ -41,6 +41,30 @@ export default function StockDetailPage() {
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [msg, setMsg] = useState<string>('')
 
+  async function handleDelete() {
+    if (!stockId) return
+    const ok = window.confirm('この在庫を削除します。よろしいですか？')
+    if (!ok) return
+    setMsg('削除中...')
+    try {
+      const { data: { user }, error: uerr } = await supabase.auth.getUser()
+      if (uerr) throw uerr
+      const payload: Record<string, unknown> = { deleted_at: new Date().toISOString() }
+      if (user?.id) (payload as any).deleted_by = user.id
+      const { error } = await supabase
+        .from('estate_stocks')
+        .update(payload)
+        .eq('id', stockId)
+      if (error) throw error
+      setMsg('削除しました。移動します...')
+      if (row?.estate_entry_id) window.location.href = `/tab-detail/${row.estate_entry_id}`
+      else window.location.href = '/tab-list'
+    } catch (e) {
+      console.error('[stock:detail:delete]', e)
+      setMsg('削除に失敗しました')
+    }
+  }
+
   useEffect(() => {
     let mounted = true
     async function run() {
@@ -122,6 +146,12 @@ export default function StockDetailPage() {
                   <Link href="/tab-list" className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 一覧へ</Link>
                 )}
                 <h2 className="text-lg font-semibold">販売中物件 詳細</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {stockId && (
+                  <Link href={`/tab-stock/${stockId}/edit`} className="px-3 py-1.5 rounded-lg bg-black text-white text-sm">編集</Link>
+                )}
+                <button onClick={() => { handleDelete().catch(console.error) }} className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm">削除</button>
               </div>
             </div>
 

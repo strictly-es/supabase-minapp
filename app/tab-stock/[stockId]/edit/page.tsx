@@ -140,7 +140,7 @@ export default function StockEditPage() {
       <main className="max-w-7xl mx-auto p-4">
         <div className="bg-white rounded-2xl shadow p-5 space-y-6">
           <div className="flex items-center justify-between">
-            <div className="flex items中心 gap-3">
+            <div className="flex items-center gap-3">
               {row?.estate_entry_id ? (
                 <Link href={`/tab-detail/${row.estate_entry_id}`} className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm">← 戻る</Link>
               ) : (
@@ -148,6 +148,7 @@ export default function StockEditPage() {
               )}
               <h2 className="text-lg font-semibold">在庫編集</h2>
             </div>
+            
           </div>
 
           {loading ? (<p className="text-sm text-gray-500">読み込み中...</p>) : !row ? (<p className="text-sm text-red-600">データが見つかりませんでした</p>) : (
@@ -226,4 +227,3 @@ export default function StockEditPage() {
     </RequireAuth>
   )
 }
-

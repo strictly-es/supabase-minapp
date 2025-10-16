@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
@@ -34,6 +35,7 @@ function toErrorMessage(e: unknown): string {
 
 export default function TabRegistPage() {
   const supabase = getSupabase()
+  const router = useRouter()
 
   const [form, setForm] = useState<FormState>({
     estate_name: '',
@@ -112,10 +114,8 @@ export default function TabRegistPage() {
       if (insErr) { setMsg('DB保存失敗: ' + insErr.message); setSubmitting(false); return }
 
       setMsg('保存しました')
-      setForm({ estate_name: '', management: '', pref: '', addr1: '', addr2: '', floor: '', elevator: '', reins_registered_date: '', contract_date: '', max_price: '', area_sqm: '', coef_total: '', interior_level_coef: '', contract_year_coef: '', past_min: '' })
-      setPdf(null)
-      const f = document.getElementById('pdf') as HTMLInputElement | null
-      if (f) f.value = ''
+      router.push('/tab-list')
+      return
     } catch (e: unknown) {
       console.error('[regist:error]', e)
       setMsg('保存に失敗しました: ' + toErrorMessage(e))

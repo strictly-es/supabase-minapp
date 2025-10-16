@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 
@@ -37,6 +38,7 @@ function toErrorMessage(e: unknown): string {
 
 export default function StockRegPage() {
   const supabase = getSupabase()
+  const router = useRouter()
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [form, setForm] = useState<FormState>({
@@ -134,8 +136,11 @@ export default function StockRegPage() {
       if (insErr) { setMsg('DB保存失敗: ' + insErr.message); setSubmitting(false); return }
 
       setMsg('保存しました')
-      setForm({ estate_entry_id: '', floor: '', area_sqm: '', list_price: '', registered_date: '', broker_name: '', broker_pref: '', broker_city: '', broker_town: '', broker_tel: '', broker_person: '', broker_mobile: '', broker_email: '', broker_mysoku_url: '', broker_photo_url: '', fundplan_url: '', status: '問い合わせ' }); setPdf(null)
-      const f = document.getElementById('mysoku') as HTMLInputElement | null; if (f) f.value = ''
+      if (form.estate_entry_id) {
+        router.push(`/tab-detail/${form.estate_entry_id}`)
+      } else {
+        router.push('/tab-list')
+      }
     } catch (e: unknown) { console.error(e); setMsg('保存に失敗しました: ' + toErrorMessage(e)) } finally { setSubmitting(false) }
   }
 
@@ -240,4 +245,3 @@ export default function StockRegPage() {
     </RequireAuth>
   )
 }
-
