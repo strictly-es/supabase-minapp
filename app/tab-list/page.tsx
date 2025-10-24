@@ -43,6 +43,9 @@ type Item = {
   hasElev: boolean | null
 }
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const
+type PageSizeOption = typeof PAGE_SIZE_OPTIONS[number]
+
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
@@ -78,6 +81,8 @@ export default function TabListPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [msg, setMsg] = useState<string>('')
+  const [pageSize, setPageSize] = useState<PageSizeOption>(50)
+  const [page, setPage] = useState<number>(1)
 
   useEffect(() => {
     let mounted = true
@@ -122,6 +127,14 @@ export default function TabListPage() {
     return () => { mounted = false }
   }, [supabase])
 
+  useEffect(() => {
+    setPage(1)
+  }, [fKey, fArea, fFloor, fElev, fBuyMax, fPastMinMax, fTargetCloseMax, fRaiseMax])
+
+  useEffect(() => {
+    setPage(1)
+  }, [pageSize])
+
   const filtered = useMemo(() => {
     const key = fKey.trim().toLowerCase()
     const areaMin = Number.parseFloat(fArea)
@@ -149,7 +162,20 @@ export default function TabListPage() {
     return arr
   }, [filtered, cardSortKey, cardSortAsc])
 
-  function setCardSort(k: CardSortKey) { if (cardSortKey === k) setCardSortAsc(!cardSortAsc); else { setCardSortKey(k); setCardSortAsc(true) } }
+  const hasItems = cardSorted.length > 0
+  const totalPages = Math.max(1, Math.ceil(cardSorted.length / pageSize))
+  const currentPage = hasItems ? Math.min(page, totalPages) : 1
+  const pageStartIndex = hasItems ? (currentPage - 1) * pageSize + 1 : 0
+  const pageEndIndex = hasItems ? Math.min(cardSorted.length, currentPage * pageSize) : 0
+  const pageItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return cardSorted.slice(start, start + pageSize)
+  }, [cardSorted, currentPage, pageSize])
+
+  function setCardSort(k: CardSortKey) {
+    setPage(1)
+    if (cardSortKey === k) setCardSortAsc(!cardSortAsc); else { setCardSortKey(k); setCardSortAsc(true) }
+  }
 
   function judge(p: Item) {
     const diff = p.pastMin - p.buyTarget
@@ -191,8 +217,21 @@ export default function TabListPage() {
         <section className="tab active">
           <div className="bg-white rounded-2xl shadow p-5 space-y-4">
             <div id="list-controls" className="mb-3 flex flex-wrap items-center gap-3">
-              <span className="text-sm text-gray-500">全<span className="num">{filtered.length}</span>件</span>
+              <span className="text-sm text-gray-500">全<span className="num">{cardSorted.length}</span>件</span>
+              <span className="text-xs text-gray-500">{hasItems ? `${pageStartIndex}〜${pageEndIndex}件を表示` : '該当する物件はありません'}</span>
               <span className="flex-1"></span>
+              <label className="flex items-center gap-1 text-xs text-gray-500">
+                1ページ表示
+                <select
+                  className="border rounded-lg px-2 py-1"
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value) as PageSizeOption)}
+                >
+                  {PAGE_SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}件</option>
+                  ))}
+                </select>
+              </label>
               <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
                 <span className="badge badge-danger">差が小さい</span>
                 <span className="badge badge-fast">日数が少ない</span>
@@ -250,7 +289,7 @@ export default function TabListPage() {
                   <div className="text-xs text-gray-400">{loading ? '読み込み中…' : msg}</div>
                 </div>
                 <div id="cardsContainer" className="divide-y">
-                  {cardSorted.map((p) => {
+                  {pageItems.map((p) => {
                     const j = judge(p)
                     return (
                       <article key={p.id} className="p-4 grid md:grid-cols-12 gap-3 hover:bg-gray-50">
@@ -290,6 +329,32 @@ export default function TabListPage() {
                       </article>
                     )
                   })}
+                </div>
+                <div className="border-t bg-gray-50 px-4 py-3 flex flex-wrap items-center gap-3 justify-between text-sm">
+                  <span className="text-gray-600">
+                    {hasItems ? `${pageStartIndex}〜${pageEndIndex}件 / 全${cardSorted.length}件` : '該当する物件はありません'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-lg border bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      disabled={!hasItems || currentPage <= 1}
+                    >
+                      前へ
+                    </button>
+                    <span className="text-gray-500">
+                      {hasItems ? `${currentPage} / ${totalPages}` : '0 / 0'}
+                    </span>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-lg border bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={!hasItems || currentPage >= totalPages}
+                    >
+                      次へ
+                    </button>
+                  </div>
                 </div>
               </section>
             </div>
