@@ -116,7 +116,7 @@ export default function StockDetailPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl bg-gray-900 text-white grid place-items-center font-bold">DX</div>
-            <h1 className="text-lg font-semibold">団地交渉DX（デモ）</h1>
+            <h1 className="text-lg font-semibold">団地レボリューション(デモ)</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <UserEmail />
