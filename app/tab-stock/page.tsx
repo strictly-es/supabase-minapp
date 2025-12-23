@@ -32,7 +32,11 @@ type StockRow = {
     renovated: boolean | null
     contract_kind: string | null
     estate_name: string | null
-  } | null
+  } | {
+    renovated: boolean | null
+    contract_kind: string | null
+    estate_name: string | null
+  }[] | null
 }
 
 type Card = {
@@ -142,6 +146,7 @@ export default function TabStockListPage() {
         if (error) throw error
         const rows = (data ?? []) as StockRow[]
         const mapped: Card[] = rows.map((r) => {
+          const entry = Array.isArray(r.estate_entries) ? (r.estate_entries[0] ?? null) : (r.estate_entries ?? null)
           const area = safeNum(r.area_sqm)
           const listPrice = safeNum(r.list_price)
           const unitStored = safeNum(r.target_unit_price)
@@ -174,7 +179,7 @@ export default function TabStockListPage() {
             raise,
             status: (r.status ?? '未設定') as string,
             days: diffDays(r.registered_date),
-            renovated: r.estate_entries?.renovated ?? null,
+            renovated: entry?.renovated ?? null,
           }
         })
         if (mounted) setCards(mapped)
