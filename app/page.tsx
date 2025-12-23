@@ -17,17 +17,17 @@ export default function Page() {
     try { return JSON.stringify(e) } catch { return 'Unknown error' }
   }
 
-  // 認証済みなら一覧（カード）へリダイレクト
+  // 認証済みなら団地一覧へリダイレクト
   useEffect(() => {
     supabase.auth.getSession()
       .then(({ data }) => {
         const u = data.session?.user ?? null
-        if (u) window.location.href = '/tab-list'
+        if (u) window.location.href = '/tab-complex-list'
       })
       .catch(() => {})
 
     const onChange = (_event: AuthChangeEvent, session: Session | null): void => {
-      if (session?.user) window.location.href = '/tab-list'
+      if (session?.user) window.location.href = '/tab-complex-list'
     }
     const { data: listener } = supabase.auth.onAuthStateChange(onChange)
     return () => { listener?.subscription.unsubscribe() }
@@ -45,7 +45,7 @@ export default function Page() {
         setAuthMsg('エラー: ' + error.message)
       } else {
         setAuthMsg('ログインしました')
-        window.location.href = '/tab-list'
+        window.location.href = '/tab-complex-list'
       }
     } catch (e: unknown) {
       setAuthMsg('通信エラー: ' + toErrorMessage(e))
