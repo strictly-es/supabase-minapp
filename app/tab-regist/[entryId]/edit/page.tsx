@@ -79,6 +79,13 @@ const initialMini: MiniForm = {
   pdf: null,
 }
 
+const floorCoefs: Record<string, number[]> = {
+  '①保守的': [1.0, 0.98, 0.95, 0.9, 0.85],
+  '②中間': [1.0, 0.99, 0.96, 0.92, 0.88],
+  '③攻め': [1.0, 1.0, 0.99, 0.98, 0.97],
+  '④超攻め': [0.98, 0.99, 1.0, 1.03, 1.07],
+}
+
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
@@ -283,7 +290,19 @@ export default function TabRegistPage() {
     return a > 0 ? Math.round(p / a) : 0
   }, [maxForm.price, maxForm.area])
 
-  const maxTarget = useMemo(() => Math.round(maxUnit * safeNum(maxForm.coefTotal)), [maxUnit, maxForm.coefTotal])
+  const maxFloorCoef = useMemo(() => {
+    const pattern = selectedComplex?.floorPattern ?? ''
+    const list = floorCoefs[pattern]
+    if (!list || list.length === 0) return 1
+    const floor = Number.parseInt(maxForm.floor, 10)
+    if (Number.isFinite(floor)) {
+      const coef = list[floor - 1]
+      if (typeof coef === 'number') return coef
+    }
+    return list[0]
+  }, [selectedComplex?.floorPattern, maxForm.floor])
+
+  const maxTarget = useMemo(() => Math.round(maxUnit * safeNum(maxForm.coefTotal) * maxFloorCoef), [maxUnit, maxForm.coefTotal, maxFloorCoef])
 
   const miniUnit = useMemo(() => {
     const p = safeNum(miniForm.price)
@@ -471,7 +490,7 @@ export default function TabRegistPage() {
                         <label className="block">間取り<input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3LDK" value={maxForm.layout} onChange={onMaxChange('layout')} /></label>
                         <label className="block">登録年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.reins} onChange={onMaxChange('reins')} /></label>
                         <label className="block">成約年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.contract} onChange={onMaxChange('contract')} /></label>
-                        <label className="block">成約価格（MAX）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="19800000" value={maxForm.price} onChange={onMaxChange('price')} /></label>
+                        <label className="block">過去成約価格（MAX）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="19800000" value={maxForm.price} onChange={onMaxChange('price')} /></label>
                         <label className="block">内装レベル係数
                           <select className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.interior} onChange={onMaxChange('interior')}>
                             <option value="">選択</option><option value="1.00">1.00</option><option value="1.05">1.05</option><option value="1.10">1.10</option><option value="1.15">1.15</option><option value="1.20">1.20</option>
