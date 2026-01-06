@@ -290,7 +290,7 @@ export default function TabListClient() {
                 <section className="bg-white rounded-2xl shadow overflow-hidden border">
                   <div className="border-b p-4 flex items-center justify-between text-sm text-gray-600">
                     <span>過去成約カード（階別 / MAX・MINI）</span>
-                    <div className="text-xs text-gray-500">目標単価・買付目標額も合わせて確認</div>
+                    <div className="text-xs text-gray-500">買付目標額は募集総額からリノベ予算・アップフロント・その他を控除</div>
                   </div>
                   <div className="divide-y" id="entries">
                     {filtered.map((d) => (

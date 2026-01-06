@@ -294,7 +294,7 @@ export default function StockRegPage() {
               <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm space-y-1">
                 <div className="font-semibold">計算メモ</div>
                 <p className="text-gray-700">目標販売成約価格 = (MAX成約単価 ㎡) × (内装+年数係数) × 階数効用比率 × 面積。</p>
-                <p className="text-gray-700">買付目標額 = 募集総額（目標成約価格/1.21） - 移動コスト - 仲介 - その他。</p>
+                <p className="text-gray-700">買付目標額 = 募集総額（目標成約価格/1.21） - リノベ予算 - アップフロント - その他。</p>
               </div>
 
               <form id="form-stock" className="space-y-6" onSubmit={(ev) => { handleSubmit(ev).catch(console.error) }}>
