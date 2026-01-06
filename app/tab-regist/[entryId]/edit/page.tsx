@@ -469,7 +469,7 @@ export default function TabRegistPage() {
                   <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm">
                     <div className="font-semibold mb-1">計算メモ</div>
                     <p className="text-gray-700">
-                      目標成約単価 ＝ 成約㎡単価 × (内装係数 + 年数係数) × 階数効用比率。買付目標額は目標成約価格から移動コスト・仲介・その他を控除して算出（既存ロジック流用予定）。
+                      目標成約単価 ＝ 成約㎡単価 × (内装係数 + 年数係数) × 階数効用比率。買付目標額は目標成約価格からリノベ予算・アップフロント・その他を控除して算出（既存ロジック流用予定）。
                     </p>
                   </div>
 
