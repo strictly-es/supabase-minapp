@@ -299,17 +299,6 @@ export default function TabComplexListPage() {
                       <option value="">指定なし</option><option value="yes">有</option><option value="no">無</option>
                     </select>
                   </label>
-                  <label className="block text-sm">MAX単価（円/㎡）上限
-                    <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="400000" disabled />
-                  </label>
-                  <label className="block text-sm">MINI成約価格（円）上限
-                    <input type="number" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="8000000" disabled />
-                  </label>
-                  <label className="block text-sm">在庫ありのみ
-                    <select className="mt-1 w-full border rounded-lg px-3 py-2" disabled>
-                      <option value="">指定なし</option><option value="yes">在庫あり</option><option value="no">なし</option>
-                    </select>
-                  </label>
                 </aside>
 
                 <section className="md:col-span-3 bg-white rounded-2xl shadow overflow-hidden border self-start">

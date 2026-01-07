@@ -105,8 +105,7 @@ export default function TabRegistPage() {
 
   const [maxForm, setMaxForm] = useState<MaxForm>(initialMax)
   const [miniForm, setMiniForm] = useState<MiniForm>(initialMini)
-  const [savingMax, setSavingMax] = useState(false)
-  const [savingMini, setSavingMini] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
   const selectedComplex = useMemo(() => complexes.find((c) => c.id === selectedComplexId) ?? null, [complexes, selectedComplexId])
@@ -198,7 +197,32 @@ export default function TabRegistPage() {
     return path
   }
 
-  async function handleSubmit(kind: 'MAX' | 'MINI', ev: FormEvent<HTMLFormElement>) {
+  function hasMaxInput(form: MaxForm): boolean {
+    return Boolean(
+      form.floor.trim() ||
+      form.area.trim() ||
+      form.layout.trim() ||
+      form.reins.trim() ||
+      form.contract.trim() ||
+      form.price.trim() ||
+      form.pdf
+    )
+  }
+
+  function hasMiniInput(form: MiniForm): boolean {
+    return Boolean(
+      form.floor.trim() ||
+      form.area.trim() ||
+      form.layout.trim() ||
+      form.reins.trim() ||
+      form.contract.trim() ||
+      form.price.trim() ||
+      form.renovated.trim() ||
+      form.pdf
+    )
+  }
+
+  async function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault()
     setMsg('')
     if (!selectedComplex) { setMsg('団地を選択してください'); return }
@@ -207,11 +231,18 @@ export default function TabRegistPage() {
     if (!user) { setMsg('ログインが必要です'); return }
 
     try {
-      if (kind === 'MAX') setSavingMax(true); else setSavingMini(true)
+      const shouldSaveMax = hasMaxInput(maxForm)
+      const shouldSaveMini = hasMiniInput(miniForm)
+      if (!shouldSaveMax && !shouldSaveMini) {
+        setMsg('MAX/MINIの入力がありません')
+        return
+      }
 
-      const pdfPath = await uploadPdf(kind === 'MAX' ? maxForm.pdf : miniForm.pdf, user.id)
+      setSaving(true)
+      const savedKinds: string[] = []
 
-      if (kind === 'MAX') {
+      if (shouldSaveMax) {
+        const pdfPath = await uploadPdf(maxForm.pdf, user.id)
         const payload = {
           created_by: user.id,
           estate_name: selectedComplex.name,
@@ -231,9 +262,12 @@ export default function TabRegistPage() {
         }
         const { error } = await supabase.from('estate_entries').insert(payload)
         if (error) throw new Error(error.message)
-        setMsg('MAXを保存しました')
+        savedKinds.push('MAX')
         setMaxForm(initialMax)
-      } else {
+      }
+
+      if (shouldSaveMini) {
+        const pdfPath = await uploadPdf(miniForm.pdf, user.id)
         const payload = {
           created_by: user.id,
           estate_name: selectedComplex.name,
@@ -254,15 +288,16 @@ export default function TabRegistPage() {
         }
         const { error } = await supabase.from('estate_entries').insert(payload)
         if (error) throw new Error(error.message)
-        setMsg('MINIを保存しました')
+        savedKinds.push('MINI')
         setMiniForm(initialMini)
       }
+      setMsg(savedKinds.length === 2 ? 'MAXとMINIを保存しました' : `${savedKinds[0]}を保存しました`)
       router.refresh()
     } catch (e) {
       console.error('[entry/save]', e)
       setMsg('保存に失敗しました: ' + toErrorMessage(e))
     } finally {
-      setSavingMax(false); setSavingMini(false)
+      setSaving(false)
     }
   }
 
@@ -294,10 +329,12 @@ export default function TabRegistPage() {
 
         <main className="max-w-7xl mx-auto p-4 space-y-6">
           <section id="tab-regist" className="tab active">
-            <div className="bg-white rounded-2xl shadow p-5 space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">団地に紐づく過去成約入力（MAX / MINI）</h2>
-                <span className="text-sm text-gray-500">{msg || '入力後、保存してください'}</span>
+            <form className="bg-white rounded-2xl shadow p-5 space-y-6" onSubmit={handleSubmit}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">団地に紐づく過去成約入力（MAX / MINI）</h2>
+                  <span className="text-sm text-gray-500">{msg || '入力後、保存してください（未入力はスキップ）'}</span>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -329,15 +366,12 @@ export default function TabRegistPage() {
               </div>
 
               {/* MAX */}
-              <form className="space-y-6" onSubmit={(ev) => { handleSubmit('MAX', ev).catch(console.error) }}>
+              <section className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">MAX</span>
                     <h3 className="font-semibold">過去MAX入力（㎡単価/目標単価を知る）</h3>
                   </div>
-                  <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg text-sm disabled:opacity-60" disabled={savingMax || !selectedComplex}>
-                    {savingMax ? '保存中...' : '保存'}
-                  </button>
                 </div>
                 <div className="grid md:grid-cols-3 gap-4 text-sm">
                   <label className="block">階数<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="5" value={maxForm.floor} onChange={onMaxChange('floor')} /></label>
@@ -381,18 +415,15 @@ export default function TabRegistPage() {
                     <p className="text-xs text-gray-500 mt-1">※団地基本情報の階数効用比率を適用</p>
                   </div>
                 </div>
-              </form>
+              </section>
 
               {/* MINI */}
-              <form className="space-y-6" onSubmit={(ev) => { handleSubmit('MINI', ev).catch(console.error) }}>
+              <section className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">MINI</span>
                     <h3 className="font-semibold">過去MINI入力（最低成約価格を記録）</h3>
                   </div>
-                  <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg text-sm disabled:opacity-60" disabled={savingMini || !selectedComplex}>
-                    {savingMini ? '保存中...' : '保存'}
-                  </button>
                 </div>
                 <div className="grid md:grid-cols-3 gap-4 text-sm">
                   <label className="block">階数<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="3" value={miniForm.floor} onChange={onMiniChange('floor')} /></label>
@@ -425,8 +456,17 @@ export default function TabRegistPage() {
                     <p className="text-xs text-gray-500 mt-1">※必要に応じ階数効用比率を適用</p>
                   </div>
                 </div>
-              </form>
-            </div>
+              </section>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-black text-white rounded-lg text-sm disabled:opacity-60"
+                  disabled={saving || !selectedComplex}
+                >
+                  {saving ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </form>
           </section>
         </main>
       </div>
