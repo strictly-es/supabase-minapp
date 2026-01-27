@@ -16,6 +16,7 @@ type ComplexForm = {
   pref: Pref
   city: string
   town: string
+  mapUrl: string
   builtYm: string
   unitCount: string
   stationName: string
@@ -69,9 +70,9 @@ const evalOptions: Record<keyof Omit<EvalState, 'comment'>, EvalOption[]> = {
     { value: 'low', label: '低い 0', score: 0 },
   ],
   inventory: [
-    { value: 'down', label: '減少（-1％以上）5', score: 5 },
-    { value: 'flat', label: '横ばい（～＋10％）3', score: 3 },
-    { value: 'up', label: '増加（＋10％以上）0', score: 0 },
+    { value: '5', label: '需要指数2.0以上 5', score: 5 },
+    { value: '3', label: '需要指数1.0~1.99 3', score: 3 },
+    { value: '0', label: '需要指数0.99以下 0', score: 0 },
   ],
   walk: [
     { value: '5', label: '5分以内 10', score: 10 },
@@ -113,9 +114,9 @@ const evalOptions: Record<keyof Omit<EvalState, 'comment'>, EvalOption[]> = {
     { value: 'bad', label: '汚い・荒れている 0', score: 0 },
   ],
   parking: [
-    { value: 'enough', label: '余裕あり 5', score: 5 },
-    { value: 'lack', label: '足りない・古い 2', score: 2 },
-    { value: 'none', label: 'なし 0', score: 0 },
+    { value: '5', label: '空あり 5', score: 5 },
+    { value: '2', label: '近隣あり 2', score: 2 },
+    { value: '0', label: '空きなし 0', score: 0 },
   ],
   view: [
     { value: 'great', label: '南向き・眺望良 10', score: 10 },
@@ -141,7 +142,7 @@ const evalOptions: Record<keyof Omit<EvalState, 'comment'>, EvalOption[]> = {
 const initialEval: EvalState = {
   marketDeals: 'rich',
   rentDemand: 'high',
-  inventory: 'down',
+  inventory: '5',
   walk: '5',
   access: 'direct30',
   convenience: 'all',
@@ -149,7 +150,7 @@ const initialEval: EvalState = {
   elevator: 'yes',
   mgmt: 'good',
   appearance: 'good',
-  parking: 'enough',
+  parking: '5',
   view: 'great',
   future: 'big',
   focus: 'high',
@@ -162,6 +163,7 @@ const initialComplex: ComplexForm = {
   pref: '',
   city: '',
   town: '',
+  mapUrl: '',
   builtYm: '',
   unitCount: '',
   stationName: '',
@@ -244,6 +246,7 @@ export default function TabComplexPage() {
         pref: form.pref || null,
         city: form.city.trim() || null,
         town: form.town.trim() || null,
+        map_url: form.mapUrl.trim() || null,
         built_ym: form.builtYm || null,
         built_age: builtAge,
         station_name: form.stationName.trim() || null,
@@ -371,6 +374,9 @@ export default function TabComplexPage() {
                   </label>
                   <label className="block md:col-span-2">町村以降
                     <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）鵠沼神明3-2-402" value={form.town} onChange={onComplexChange('town')} />
+                  </label>
+                  <label className="block md:col-span-3">GoogleマップURL
+                    <input type="url" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="https://maps.app.goo.gl/..." value={form.mapUrl} onChange={onComplexChange('mapUrl')} />
                   </label>
                   <label className="block">築年月
                     <input type="month" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.builtYm} onChange={onComplexChange('builtYm')} />
@@ -501,7 +507,7 @@ export default function TabComplexPage() {
                         {evalOptions.rentDemand.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
-                    <label className="block">在庫増減率
+                    <label className="block">需要指数 <span className="text-xs text-gray-500">※売れやすさの指標(直近1年の成約件数÷現在の在庫数)</span>
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.inventory} onChange={onEvalChange('inventory')}>
                         {evalOptions.inventory.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
@@ -523,7 +529,7 @@ export default function TabComplexPage() {
                         {evalOptions.access.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
-                    <label className="block">生活利便性
+                    <label className="block">生活利便性(スーパー、病院、学校、公園の有無)
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.convenience} onChange={onEvalChange('convenience')}>
                         {evalOptions.convenience.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
@@ -577,12 +583,12 @@ export default function TabComplexPage() {
                         {evalOptions.future.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
-                    <label className="block">行政・プレイヤー注力度
+                    <label className="block">行政による住み替え促進・まちづくりプレイヤーの活動
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.focus} onChange={onEvalChange('focus')}>
                         {evalOptions.focus.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
-                    <label className="block">高齢者支援サービス・NPO等
+                    <label className="block">高齢者支援等住民サービスの充実度
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.support} onChange={onEvalChange('support')}>
                         {evalOptions.support.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>

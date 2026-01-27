@@ -31,6 +31,7 @@ type Complex = {
 type Card = {
   id: string
   name: string
+  pref: string
   addr: string
   station: string
   built: string
@@ -39,10 +40,17 @@ type Card = {
   score: number | null
   hasElevator: boolean
   floorPattern: string
+  area: number | null
   market: number | null
   loc: number | null
   bld: number | null
   plus: number | null
+}
+
+type EntryAreaRow = {
+  complex_id: string
+  area_sqm: number | null
+  contract_date: string | null
 }
 
 type FactorItem = { score?: number }
@@ -75,6 +83,11 @@ function formatBuilt(ym: string | null, age: number | null): string {
   return `${y}${age != null ? ` (築${age}年)` : ''}`.trim()
 }
 
+function normalizePref(pref: string | null): string {
+  if (!pref) return ''
+  return pref.replace(/(都|道|府|県)$/u, '')
+}
+
 function pickScore(item?: FactorItem): number {
   if (!item || typeof item !== 'object') return 0
   return typeof item.score === 'number' ? item.score : 0
@@ -87,9 +100,11 @@ export default function TabComplexListPage() {
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [fKey, setFKey] = useState('')
+  const [fPref, setFPref] = useState('')
   const [fScoreMin, setFScoreMin] = useState('')
   const [fBuiltAgeMax, setFBuiltAgeMax] = useState('')
   const [fElev, setFElev] = useState('')
+  const [fAreaBand, setFAreaBand] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -108,6 +123,27 @@ export default function TabComplexListPage() {
           .order('created_at', { ascending: false })
         if (error) throw error
         const rows = (data ?? []) as Complex[]
+        const ids = rows.map((r) => r.id).filter(Boolean)
+        const areaByComplex = new Map<string, number>()
+        if (ids.length > 0) {
+          const { data: areaData, error: areaError } = await supabase
+            .from('estate_entries')
+            .select('complex_id, area_sqm, contract_date')
+            .in('complex_id', ids)
+            .is('deleted_at', null)
+            .order('contract_date', { ascending: false, nullsFirst: false })
+            .limit(5000)
+          if (areaError) {
+            console.warn('failed to load area info', areaError)
+          } else {
+            const areaRows = (areaData ?? []) as EntryAreaRow[]
+            for (const row of areaRows) {
+              const area = row.area_sqm
+              if (!row.complex_id || typeof area !== 'number' || !Number.isFinite(area)) continue
+              if (!areaByComplex.has(row.complex_id)) areaByComplex.set(row.complex_id, area)
+            }
+          }
+        }
         const mapped: Card[] = rows.map((r) => {
           const evals = [...(r.complex_evaluations ?? [])].sort((a, b) => {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -121,6 +157,7 @@ export default function TabComplexListPage() {
           return {
             id: r.id,
             name: r.name,
+            pref: r.pref ?? '',
             addr: formatAddr(r.pref, r.city, r.town),
             station: formatStation(r.station_name, r.station_access_type, r.station_minutes),
             built: formatBuilt(r.built_ym, r.built_age),
@@ -129,6 +166,7 @@ export default function TabComplexListPage() {
             score: latest?.total_score ?? null,
             hasElevator: r.has_elevator ?? false,
             floorPattern: r.floor_coef_pattern ?? '',
+            area: areaByComplex.get(r.id) ?? null,
             market,
             loc,
             bld,
@@ -156,6 +194,7 @@ export default function TabComplexListPage() {
         const hay = `${c.name} ${c.addr} ${c.station}`.toLowerCase()
         if (!hay.includes(key)) return false
       }
+      if (fPref && normalizePref(c.pref) !== fPref) return false
       if (Number.isFinite(scoreMin) && scoreMin > 0) {
         const s = c.score ?? 0
         if (s < scoreMin) return false
@@ -167,9 +206,18 @@ export default function TabComplexListPage() {
         if (fElev === 'yes' && c.hasElevator !== true) return false
         if (fElev === 'no' && c.hasElevator !== false) return false
       }
+      if (fAreaBand) {
+        const area = c.area
+        if (typeof area !== 'number' || !Number.isFinite(area)) return false
+        if (fAreaBand === 'lt50' && area >= 50) return false
+        if (fAreaBand === '50-59' && (area < 50 || area >= 60)) return false
+        if (fAreaBand === '60-69' && (area < 60 || area >= 70)) return false
+        if (fAreaBand === '70-79' && (area < 70 || area >= 80)) return false
+        if (fAreaBand === 'gte80' && area < 80) return false
+      }
       return true
     })
-  }, [cards, fKey, fScoreMin, fBuiltAgeMax, fElev])
+  }, [cards, fKey, fPref, fScoreMin, fBuiltAgeMax, fElev, fAreaBand])
 
   const headerMsg = useMemo(() => {
     if (loading) return '読み込み中...'
@@ -200,9 +248,11 @@ export default function TabComplexListPage() {
   }
   function resetFilters() {
     setFKey('')
+    setFPref('')
     setFScoreMin('')
     setFBuiltAgeMax('')
     setFElev('')
+    setFAreaBand('')
   }
   return (
     <RequireAuth>
@@ -269,6 +319,17 @@ export default function TabComplexListPage() {
                       onChange={(e) => setFKey(e.target.value)}
                     />
                   </label>
+                  <label className="block text-sm">都道府県
+                    <select
+                      className="mt-1 w-full border rounded-lg px-3 py-2"
+                      value={fPref}
+                      onChange={(e) => setFPref(e.target.value)}
+                    >
+                      <option value="">指定なし</option>
+                      <option value="大阪">大阪</option>
+                      <option value="兵庫">兵庫</option>
+                    </select>
+                  </label>
                   <label className="block text-sm">スコア下限
                     <input
                       type="number"
@@ -297,6 +358,20 @@ export default function TabComplexListPage() {
                       onChange={(e) => setFElev(e.target.value)}
                     >
                       <option value="">指定なし</option><option value="yes">有</option><option value="no">無</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm">m²数
+                    <select
+                      className="mt-1 w-full border rounded-lg px-3 py-2"
+                      value={fAreaBand}
+                      onChange={(e) => setFAreaBand(e.target.value)}
+                    >
+                      <option value="">指定なし</option>
+                      <option value="lt50">50m²未満</option>
+                      <option value="50-59">50~59m²</option>
+                      <option value="60-69">60~69m²</option>
+                      <option value="70-79">70~79m²</option>
+                      <option value="gte80">80m²以上</option>
                     </select>
                   </label>
                 </aside>

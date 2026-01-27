@@ -43,7 +43,7 @@ const initialMax: MaxForm = {
   reins: '',
   contract: '',
   price: '',
-  interior: '1.00',
+  interior: '1.0',
   year: '0.00',
   coefTotal: '1.00',
   pdf: null,
@@ -176,8 +176,6 @@ export default function TabRegistPage() {
     const a = safeNum(miniForm.area)
     return a > 0 ? Math.round(p / a) : 0
   }, [miniForm.price, miniForm.area])
-
-  const miniTarget = useMemo(() => Math.round(miniUnit * safeNum(miniForm.coef)), [miniUnit, miniForm.coef])
 
   const onMaxChange = <K extends keyof MaxForm>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const val = e.target.value
@@ -382,7 +380,14 @@ export default function TabRegistPage() {
                   <label className="block">過去成約価格（MAX）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="19800000" value={maxForm.price} onChange={onMaxChange('price')} /></label>
                   <label className="block">内装レベル係数
                     <select className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.interior} onChange={onMaxChange('interior')}>
-                      <option value="">選択</option><option value="1.00">1.00</option><option value="1.05">1.05</option><option value="1.10">1.10</option><option value="1.15">1.15</option><option value="1.20">1.20</option>
+                      <option value="">選択</option>
+                      <option value="1.0">デザイン性+断熱 1.0</option>
+                      <option value="1.05">フルリノベーション 1.05</option>
+                      <option value="1.1">全面リフォーム 1.1</option>
+                      <option value="1.15">部分リフォーム(設備一部更新+表層) 1.15</option>
+                      <option value="1.2">クロス・壁面・床のみ 1.2</option>
+                      <option value="1.25">原状渡し(要リフォーム) 1.25</option>
+                      <option value="1.3">悪条件(土足可レベル) 1.3</option>
                     </select>
                   </label>
                   <label className="block">成約年月日 上乗せ係数
@@ -441,19 +446,10 @@ export default function TabRegistPage() {
                     <input type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" onChange={(e) => setMiniForm((prev) => ({ ...prev, pdf: e.target.files?.[0] ?? null }))} />
                   </label>
                 </div>
-                <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm grid md:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm grid md:grid-cols-1 gap-4">
                   <div>
                     <div className="text-gray-500">成約㎡単価</div>
                     <div className="text-2xl font-semibold"><span className="num">{miniUnit ? fmtYen(miniUnit) + '/㎡' : '—'}</span></div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">係数（任意: 内装/年数適用する場合）</div>
-                    <input type="number" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2 num" value={miniForm.coef} onChange={onMiniChange('coef')} />
-                  </div>
-                  <div>
-                    <div className="text-gray-500">目標単価（階効用込み）</div>
-                    <div className="text-2xl font-semibold"><span className="num">{miniTarget ? fmtYen(miniTarget) + '/㎡' : '—'}</span></div>
-                    <p className="text-xs text-gray-500 mt-1">※必要に応じ階数効用比率を適用</p>
                   </div>
                 </div>
               </section>
