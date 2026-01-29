@@ -95,6 +95,15 @@ function fmtYen(n: number): string {
   return n.toLocaleString('ja-JP') + ' 円'
 }
 
+function diffDays(a: string, b: string): number | null {
+  if (!a || !b) return null
+  const da = new Date(a)
+  const db = new Date(b)
+  if (Number.isNaN(+da) || Number.isNaN(+db)) return null
+  const ms = db.getTime() - da.getTime()
+  return Math.round(ms / 86400000)
+}
+
 export default function TabRegistPage() {
   const supabase = getSupabase()
   const router = useRouter()
@@ -157,6 +166,8 @@ export default function TabRegistPage() {
     return a > 0 ? Math.round(p / a) : 0
   }, [maxForm.price, maxForm.area])
 
+  const maxDays = useMemo(() => diffDays(maxForm.reins, maxForm.contract), [maxForm.reins, maxForm.contract])
+
   const maxFloorCoef = useMemo(() => {
     const pattern = selectedComplex?.floorPattern ?? ''
     const list = floorCoefs[pattern]
@@ -176,6 +187,8 @@ export default function TabRegistPage() {
     const a = safeNum(miniForm.area)
     return a > 0 ? Math.round(p / a) : 0
   }, [miniForm.price, miniForm.area])
+
+  const miniDays = useMemo(() => diffDays(miniForm.reins, miniForm.contract), [miniForm.reins, miniForm.contract])
 
   const onMaxChange = <K extends keyof MaxForm>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const val = e.target.value
@@ -377,6 +390,9 @@ export default function TabRegistPage() {
                   <label className="block">間取り<input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3LDK" value={maxForm.layout} onChange={onMaxChange('layout')} /></label>
                   <label className="block">登録年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.reins} onChange={onMaxChange('reins')} /></label>
                   <label className="block">成約年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.contract} onChange={onMaxChange('contract')} /></label>
+                  <label className="block">成約までの経過日数(成約年月日-登録年月日)
+                    <input type="text" readOnly className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600" value={maxDays === null ? '' : `${maxDays} 日`} />
+                  </label>
                   <label className="block">過去成約価格（MAX）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="19800000" value={maxForm.price} onChange={onMaxChange('price')} /></label>
                   <label className="block">内装レベル係数
                     <select className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.interior} onChange={onMaxChange('interior')}>
@@ -436,6 +452,9 @@ export default function TabRegistPage() {
                   <label className="block">間取り<input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="2LDK" value={miniForm.layout} onChange={onMiniChange('layout')} /></label>
                   <label className="block">登録年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.reins} onChange={onMiniChange('reins')} /></label>
                   <label className="block">成約年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.contract} onChange={onMiniChange('contract')} /></label>
+                  <label className="block">成約までの経過日数(成約年月日-登録年月日)
+                    <input type="text" readOnly className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600" value={miniDays === null ? '' : `${miniDays} 日`} />
+                  </label>
                   <label className="block">成約価格（MINI）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="7500000" value={miniForm.price} onChange={onMiniChange('price')} /></label>
                   <label className="block">リノベ有無
                     <select className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.renovated} onChange={onMiniChange('renovated')}>

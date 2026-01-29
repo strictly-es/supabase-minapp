@@ -8,7 +8,7 @@ import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 
 type Complex = { id: string; name: string; pref: string | null; city: string | null; floorPattern: string | null }
-type Entry = { id: string; floor: number | null; area: number | null; layout: string | null; maxPrice: number | null; coefTotal: number | null; reins: string | null; contract: string | null }
+type Entry = { id: string; floor: number | null; area: number | null; layout: string | null; maxPrice: number | null; coefTotal: number | null; interiorCoef: number | null; yearCoef: number | null; reins: string | null; contract: string | null }
 
 type FormState = {
   floor: string
@@ -58,6 +58,7 @@ function toInt(v: string): number | null { return v.trim() === '' ? null : Numbe
 function toNum(v: string): number | null { return v.trim() === '' ? null : Number.parseFloat(v) }
 function fmtYen(n: number): string { return n.toLocaleString('ja-JP') + ' 円' }
 function fmtUnit(n: number): string { return fmtYen(n) + '/㎡' }
+function fmtCoef(n: number | null | undefined): string { return typeof n === 'number' && Number.isFinite(n) ? n.toFixed(2) : '—' }
 
 export default function StockRegPage() {
   const supabase = getSupabase()
@@ -126,6 +127,8 @@ export default function StockRegPage() {
           layout: (r.layout as string | null) ?? null,
           maxPrice: (r.max_price as number | null) ?? null,
           coefTotal: (r.coef_total as number | null) ?? (safeNum(r.interior_level_coef as number | null) + safeNum(r.contract_year_coef as number | null)),
+          interiorCoef: (r.interior_level_coef as number | null) ?? null,
+          yearCoef: (r.contract_year_coef as number | null) ?? null,
           reins: (r.reins_registered_date as string | null) ?? null,
           contract: (r.contract_date as string | null) ?? null,
         }))
@@ -329,12 +332,27 @@ export default function StockRegPage() {
                     <label className="block">係数（内装 + 年数）
                       <input name="coef_total" type="number" min="0" step="0.01" value={form.coefTotal} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('coefTotal')} />
                     </label>
-                    <div className="block rounded-xl border border-gray-200 p-3 bg-gray-50 md:col-span-2">
-                      <div className="text-gray-500 text-xs">階数効用 参考</div>
-                      <div className="text-xs text-gray-600">①保守的: 1F 1.00 / 2F 0.98 / 3F 0.95 / 4F 0.90 / 5F 0.85</div>
-                      <div className="text-xs text-gray-600">②中間: 1.00 / 0.99 / 0.96 / 0.92 / 0.88</div>
-                      <div className="text-xs text-gray-600">③攻め: 1.00 / 1.00 / 0.99 / 0.98 / 0.97</div>
-                      <div className="text-xs text-gray-600">④超攻め: 0.98 / 0.99 / 1.00 / 1.03 / 1.07</div>
+                    <div className="md:col-span-2 space-y-2">
+                      <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
+                        <div className="text-gray-500 text-xs">過去MAXの係数（内装 / 年数）</div>
+                        <div className="mt-1 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="text-xs text-gray-500">内装レベル係数</div>
+                            <div className="font-semibold">{fmtCoef(selectedEntry?.interiorCoef)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500">成約年月日 上乗せ係数</div>
+                            <div className="font-semibold">{fmtCoef(selectedEntry?.yearCoef)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
+                        <div className="text-gray-500 text-xs">階数効用 参考</div>
+                        <div className="text-xs text-gray-600">①保守的: 1F 1.00 / 2F 0.98 / 3F 0.95 / 4F 0.90 / 5F 0.85</div>
+                        <div className="text-xs text-gray-600">②中間: 1.00 / 0.99 / 0.96 / 0.92 / 0.88</div>
+                        <div className="text-xs text-gray-600">③攻め: 1.00 / 1.00 / 0.99 / 0.98 / 0.97</div>
+                        <div className="text-xs text-gray-600">④超攻め: 0.98 / 0.99 / 1.00 / 1.03 / 1.07</div>
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-auto rounded-xl border border-gray-200 bg-gray-50">
