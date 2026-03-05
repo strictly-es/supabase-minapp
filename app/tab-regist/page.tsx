@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
@@ -223,6 +223,7 @@ function compareRows(a: DealRow, b: DealRow, key: SortKey): number {
 
 function TabRegistPageContent() {
   const supabase = getSupabase()
+  const router = useRouter()
   const searchParams = useSearchParams()
 
   const [complexes, setComplexes] = useState<ComplexOption[]>([])
@@ -230,7 +231,6 @@ function TabRegistPageContent() {
   const [loadingComplexes, setLoadingComplexes] = useState(false)
 
   const [rows, setRows] = useState<DealRow[]>([buildEmptyRow(1)])
-  const [, setRowSeed] = useState(1)
   const [sortKey, setSortKey] = useState<SortKey>('input_order')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
@@ -410,12 +410,7 @@ function TabRegistPageContent() {
       const { error } = await supabase.from('estate_entries').insert(payloads)
       if (error) throw error
 
-      setMsg('登録しました')
-      setRowSeed((prev) => {
-        const next = prev + 1
-        setRows([buildEmptyRow(next)])
-        return next
-      })
+      router.push(`/tab-list?complexId=${encodeURIComponent(selectedComplex.id)}`)
     } catch (e) {
       console.error('[tab-regist:save]', e)
       setMsg('保存に失敗しました: ' + toErrorMessage(e))

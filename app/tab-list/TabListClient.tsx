@@ -490,6 +490,9 @@ export default function TabListClient() {
                             )}
                           </td>
                           <td className="p-2">
+                            <Link className="underline text-blue-700 mr-2" href={`/tab-regist/${encodeURIComponent(row.id)}/edit`}>
+                              編集
+                            </Link>
                             <button
                               type="button"
                               className="underline text-red-700 disabled:opacity-50"
