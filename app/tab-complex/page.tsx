@@ -8,8 +8,8 @@ import UserEmail from '@/components/UserEmail'
 import { getSupabase } from '@/lib/supabaseClient'
 
 type Pref = '' | '東京' | '神奈川' | '千葉' | '埼玉' | '大阪' | '兵庫'
-type YesNo = '' | '有' | '無'
 type Access = '' | '徒歩' | 'バス' | '車・その他'
+type BuildingStructure = '' | 'SRC' | 'RC' | '鉄骨造' | '木造'
 
 type ComplexForm = {
   name: string
@@ -26,8 +26,8 @@ type ComplexForm = {
   builder: string
   mgmtCompany: string
   mgmtType: '' | '自主管理' | '一部委託' | '全部委託'
-  hasElevator: YesNo
-  floorPattern: '' | '①保守的' | '②中間' | '③攻め' | '④超攻め'
+  buildingStructure: BuildingStructure
+  floorCount: string
 }
 
 type EvalOption = { value: string; label: string; score: number }
@@ -51,13 +51,6 @@ type EvalState = {
 }
 
 const prefOptions: Pref[] = ['東京', '神奈川', '千葉', '埼玉', '大阪', '兵庫', '']
-const floorCoefPatterns = [
-  { value: '①保守的', detail: '1F 1.00 / 2F 0.98 / 3F 0.95 / 4F 0.90 / 5F 0.85' },
-  { value: '②中間', detail: '1F 1.00 / 2F 0.99 / 3F 0.96 / 4F 0.92 / 5F 0.88' },
-  { value: '③攻め', detail: '1F 1.00 / 2F 1.00 / 3F 0.99 / 4F 0.98 / 5F 0.97' },
-  { value: '④超攻め', detail: '1F 0.98 / 2F 0.99 / 3F 1.00 / 4F 1.03 / 5F 1.07' },
-]
-
 const evalOptions: Record<keyof Omit<EvalState, 'comment'>, EvalOption[]> = {
   marketDeals: [
     { value: 'rich', label: '豊富（年に全戸数×3％以上）10', score: 10 },
@@ -173,8 +166,8 @@ const initialComplex: ComplexForm = {
   builder: '',
   mgmtCompany: '',
   mgmtType: '',
-  hasElevator: '',
-  floorPattern: '',
+  buildingStructure: '',
+  floorCount: '',
 }
 
 function toErrorMessage(e: unknown): string {
@@ -239,8 +232,6 @@ export default function TabComplexPage() {
       if (!form.name.trim()) { setMsg('団地名は必須です'); setSaving(false); return }
 
       const toInt = (v: string): number | null => v.trim() === '' ? null : Number.parseInt(v, 10)
-      const toBool = (v: YesNo): boolean | null => v === '' ? null : (v === '有')
-
       const complexPayload = {
         name: form.name.trim(),
         pref: form.pref || null,
@@ -257,8 +248,8 @@ export default function TabComplexPage() {
         mgmt_company: form.mgmtCompany.trim() || null,
         mgmt_type: form.mgmtType || null,
         unit_count: toInt(form.unitCount),
-        has_elevator: toBool(form.hasElevator),
-        floor_coef_pattern: form.floorPattern || null,
+        building_structure: form.buildingStructure || null,
+        floor_count: toInt(form.floorCount),
         created_by: user.id,
         updated_by: user.id,
       }
@@ -430,47 +421,18 @@ export default function TabComplexPage() {
                       <option value="全部委託">全部委託</option>
                     </select>
                   </label>
-                  <label className="block">エレベーター
-                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.hasElevator} onChange={onComplexChange('hasElevator')}>
+                  <label className="block">建物構造
+                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.buildingStructure} onChange={onComplexChange('buildingStructure')}>
                       <option value="">選択</option>
-                      <option value="有">有</option>
-                      <option value="無">無</option>
+                      <option value="SRC">SRC</option>
+                      <option value="RC">RC</option>
+                      <option value="鉄骨造">鉄骨造</option>
+                      <option value="木造">木造</option>
                     </select>
                   </label>
-                  <label className="block">階数効用比率の選択
-                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.floorPattern} onChange={onComplexChange('floorPattern')}>
-                      <option value="">選択</option>
-                      {floorCoefPatterns.map((p) => <option key={p.value} value={p.value}>{p.value}</option>)}
-                    </select>
+                  <label className="block">階数
+                    <input type="number" min="1" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）5" value={form.floorCount} onChange={onComplexChange('floorCount')} />
                   </label>
-                </div>
-                <div className="overflow-auto">
-                  <table className="text-xs border border-gray-200 rounded-lg w-full">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th className="px-3 py-2 text-left">パターン</th>
-                        <th className="px-3 py-2">1F</th>
-                        <th className="px-3 py-2">2F</th>
-                        <th className="px-3 py-2">3F</th>
-                        <th className="px-3 py-2">4F</th>
-                        <th className="px-3 py-2">5F</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-1">①保守的</td><td className="px-3 py-1">1.00</td><td className="px-3 py-1">0.98</td><td className="px-3 py-1">0.95</td><td className="px-3 py-1">0.90</td><td className="px-3 py-1">0.85</td>
-                      </tr>
-                      <tr>
-                        <td className="px-3 py-1">②中間</td><td className="px-3 py-1">1.00</td><td className="px-3 py-1">0.99</td><td className="px-3 py-1">0.96</td><td className="px-3 py-1">0.92</td><td className="px-3 py-1">0.88</td>
-                      </tr>
-                      <tr>
-                        <td className="px-3 py-1">③攻め</td><td className="px-3 py-1">1.00</td><td className="px-3 py-1">1.00</td><td className="px-3 py-1">0.99</td><td className="px-3 py-1">0.98</td><td className="px-3 py-1">0.97</td>
-                      </tr>
-                      <tr>
-                        <td className="px-3 py-1">④超攻め</td><td className="px-3 py-1">0.98</td><td className="px-3 py-1">0.99</td><td className="px-3 py-1">1.00</td><td className="px-3 py-1">1.03</td><td className="px-3 py-1">1.07</td>
-                      </tr>
-                    </tbody>
-                  </table>
                 </div>
               </section>
 

@@ -45,12 +45,26 @@ type Card = {
   loc: number | null
   bld: number | null
   plus: number | null
+  maxPrice: number | null
+  maxUnitPrice: number | null
+  miniPrice: number | null
+  miniUnitPrice: number | null
+  stockCount: number
+  stockDaysOldest: number | null
 }
 
-type EntryAreaRow = {
+type EntrySummaryRow = {
   complex_id: string
+  contract_kind: 'MAX' | 'MINI' | null
+  max_price: number | null
+  past_min: number | null
   area_sqm: number | null
   contract_date: string | null
+}
+
+type StockSummaryRow = {
+  complex_id: string | null
+  registered_date: string | null
 }
 
 type FactorItem = { score?: number }
@@ -93,6 +107,30 @@ function pickScore(item?: FactorItem): number {
   return typeof item.score === 'number' ? item.score : 0
 }
 
+function toValidNumber(v: number | null | undefined): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+function calcUnitPrice(price: number | null | undefined, area: number | null | undefined): number | null {
+  const p = toValidNumber(price)
+  const a = toValidNumber(area)
+  if (p == null || a == null || a <= 0) return null
+  return Math.round(p / a)
+}
+
+function diffFromTodayDays(date: string | null): number | null {
+  if (!date) return null
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return null
+  const ms = Math.abs(Date.now() - d.getTime())
+  return Math.round(ms / 86400000)
+}
+
+function fmtYen(n: number | null): string {
+  if (n == null) return '—'
+  return `${Math.round(n).toLocaleString('ja-JP')}円`
+}
+
 export default function TabComplexListPage() {
   const supabase = getSupabase()
   const [cards, setCards] = useState<Card[]>([])
@@ -125,22 +163,61 @@ export default function TabComplexListPage() {
         const rows = (data ?? []) as Complex[]
         const ids = rows.map((r) => r.id).filter(Boolean)
         const areaByComplex = new Map<string, number>()
+        const maxDealByComplex = new Map<string, { price: number | null; unitPrice: number | null }>()
+        const miniDealByComplex = new Map<string, { price: number | null; unitPrice: number | null }>()
+        const stockCountByComplex = new Map<string, number>()
+        const oldestRegisteredByComplex = new Map<string, string>()
         if (ids.length > 0) {
-          const { data: areaData, error: areaError } = await supabase
+          const { data: entryData, error: entryError } = await supabase
             .from('estate_entries')
-            .select('complex_id, area_sqm, contract_date')
+            .select('complex_id, contract_kind, max_price, past_min, area_sqm, contract_date')
             .in('complex_id', ids)
             .is('deleted_at', null)
             .order('contract_date', { ascending: false, nullsFirst: false })
             .limit(5000)
-          if (areaError) {
-            console.warn('failed to load area info', areaError)
+          if (entryError) {
+            console.warn('failed to load entry info', entryError)
           } else {
-            const areaRows = (areaData ?? []) as EntryAreaRow[]
-            for (const row of areaRows) {
-              const area = row.area_sqm
-              if (!row.complex_id || typeof area !== 'number' || !Number.isFinite(area)) continue
-              if (!areaByComplex.has(row.complex_id)) areaByComplex.set(row.complex_id, area)
+            const entryRows = (entryData ?? []) as EntrySummaryRow[]
+            for (const row of entryRows) {
+              if (!row.complex_id) continue
+              const area = toValidNumber(row.area_sqm)
+              if (area != null && !areaByComplex.has(row.complex_id)) areaByComplex.set(row.complex_id, area)
+              if (row.contract_kind === 'MAX' && !maxDealByComplex.has(row.complex_id)) {
+                maxDealByComplex.set(row.complex_id, {
+                  price: toValidNumber(row.max_price),
+                  unitPrice: calcUnitPrice(row.max_price, row.area_sqm),
+                })
+              }
+              if (row.contract_kind === 'MINI' && !miniDealByComplex.has(row.complex_id)) {
+                miniDealByComplex.set(row.complex_id, {
+                  price: toValidNumber(row.past_min),
+                  unitPrice: calcUnitPrice(row.past_min, row.area_sqm),
+                })
+              }
+            }
+          }
+
+          const { data: stockData, error: stockError } = await supabase
+            .from('estate_stocks')
+            .select('complex_id, registered_date')
+            .in('complex_id', ids)
+            .is('deleted_at', null)
+            .limit(5000)
+          if (stockError) {
+            console.warn('failed to load stock info', stockError)
+          } else {
+            const stockRows = (stockData ?? []) as StockSummaryRow[]
+            for (const row of stockRows) {
+              if (!row.complex_id) continue
+              stockCountByComplex.set(row.complex_id, (stockCountByComplex.get(row.complex_id) ?? 0) + 1)
+              if (!row.registered_date) continue
+              const rowDateMs = new Date(row.registered_date).getTime()
+              if (Number.isNaN(rowDateMs)) continue
+              const currentOldest = oldestRegisteredByComplex.get(row.complex_id)
+              if (!currentOldest || rowDateMs < new Date(currentOldest).getTime()) {
+                oldestRegisteredByComplex.set(row.complex_id, row.registered_date)
+              }
             }
           }
         }
@@ -154,6 +231,10 @@ export default function TabComplexListPage() {
           const loc = factors?.location ? pickScore(factors.location.walk) + pickScore(factors.location.access) + pickScore(factors.location.convenience) : null
           const bld = factors?.building ? pickScore(factors.building.scale) + pickScore(factors.building.elevator) + pickScore(factors.building.mgmt) + pickScore(factors.building.appearance) + pickScore(factors.building.parking) + pickScore(factors.building.view) : null
           const plus = factors?.plus ? pickScore(factors.plus.future) + pickScore(factors.plus.focus) + pickScore(factors.plus.support) : null
+          const maxDeal = maxDealByComplex.get(r.id)
+          const miniDeal = miniDealByComplex.get(r.id)
+          const stockCount = stockCountByComplex.get(r.id) ?? 0
+          const stockDaysOldest = diffFromTodayDays(oldestRegisteredByComplex.get(r.id) ?? null)
           return {
             id: r.id,
             name: r.name,
@@ -171,6 +252,12 @@ export default function TabComplexListPage() {
             loc,
             bld,
             plus,
+            maxPrice: maxDeal?.price ?? null,
+            maxUnitPrice: maxDeal?.unitPrice ?? null,
+            miniPrice: miniDeal?.price ?? null,
+            miniUnitPrice: miniDeal?.unitPrice ?? null,
+            stockCount,
+            stockDaysOldest,
           }
         })
         if (mounted) setCards(mapped)
@@ -395,6 +482,23 @@ export default function TabComplexListPage() {
                             <div className="text-xs text-gray-500">{c.station}</div>
                             <div className="text-xs text-gray-500">築年月 {c.built} / 戸数 {c.units}</div>
                             <div className="text-xs text-gray-500">階数効用: {c.floorPattern || '—'}</div>
+                            <div className="mt-2 grid md:grid-cols-3 gap-2 text-xs">
+                              <div className="px-2 py-1.5 rounded-lg bg-rose-50 text-rose-700">
+                                <div className="text-[11px] text-rose-500">過去MAX</div>
+                                <div className="font-semibold num">{fmtYen(c.maxPrice)}</div>
+                                <div className="text-[11px]">㎡単価: <span className="num">{c.maxUnitPrice != null ? `${fmtYen(c.maxUnitPrice)}/㎡` : '—'}</span></div>
+                              </div>
+                              <div className="px-2 py-1.5 rounded-lg bg-teal-50 text-teal-700">
+                                <div className="text-[11px] text-teal-500">過去MINI</div>
+                                <div className="font-semibold num">{fmtYen(c.miniPrice)}</div>
+                                <div className="text-[11px]">㎡単価: <span className="num">{c.miniUnitPrice != null ? `${fmtYen(c.miniUnitPrice)}/㎡` : '—'}</span></div>
+                              </div>
+                              <div className="px-2 py-1.5 rounded-lg bg-gray-100 text-gray-700">
+                                <div className="text-[11px] text-gray-500">現在在庫</div>
+                                <div className="font-semibold">{c.stockCount}件</div>
+                                <div className="text-[11px]">経過日数: <span className="num">{c.stockDaysOldest != null ? `${c.stockDaysOldest}日` : '—'}</span></div>
+                              </div>
+                            </div>
                           </div>
                           <div className="text-right space-y-2">
                             <div className="text-sm text-gray-500">カテゴリ別</div>

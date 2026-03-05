@@ -7,51 +7,58 @@ import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 
-type ComplexOption = { id: string; name: string; pref: string | null; city: string | null; floorPattern: string | null }
+type SortKey = 'contract_price' | 'contract_date' | 'condition_status' | 'floor'
+type SortDirection = 'asc' | 'desc'
+type LabelFilter = 'all' | 'MAX' | 'MINI' | 'none'
+type ConditionStatus =
+  | 'FULL_RENO_INSULATED'
+  | 'FULL_RENO_HIGH_DESIGN'
+  | 'FULL_REFORM_ALL_EQUIP'
+  | 'PARTIAL_REFORM'
+  | 'OWNER_OCCUPIED'
+  | 'NEEDS_RENOVATION'
+  | 'INVESTMENT_PROPERTY'
+  | null
+
+type ComplexOption = {
+  id: string
+  name: string
+  pref: string | null
+  city: string | null
+  town: string | null
+  stationName: string | null
+  stationAccessType: string | null
+  stationMinutes: number | null
+  unitCount: number | null
+}
 
 type EntryRow = {
   id: string
   contract_kind: 'MAX' | 'MINI' | null
   floor: number | null
   area_sqm: number | null
-  layout: string | null
+  contract_price: number | null
+  unit_price: number | null
+  built_month: string | null
+  building_no: number | null
+  condition_status: ConditionStatus
+  has_elevator: boolean | null
   reins_registered_date: string | null
   contract_date: string | null
   max_price: number | null
   past_min: number | null
-  coef_total: number | null
-  interior_level_coef: number | null
-  contract_year_coef: number | null
+  mysoku_pdf_path: string | null
+  created_at: string
 }
 
-type Card = {
-  kind: 'MAX' | 'MINI'
-  entryId: string
-  summary: {
-    unit: number
-    floor: number | null
-    price: number
-    area: number
-    layout: string
-    reins: string
-    contract: string
-    days: number
-    coefTotal: number
-  }
-  floors: {
-    floor: number
-    predictedUnit: number
-    targetUnit: number
-    raise: number
-    buyTargetUnit: number
-  }[]
-}
-
-const floorCoefs: Record<string, number[]> = {
-  '①保守的': [1.0, 0.98, 0.95, 0.9, 0.85],
-  '②中間': [1.0, 0.99, 0.96, 0.92, 0.88],
-  '③攻め': [1.0, 1.0, 0.99, 0.98, 0.97],
-  '④超攻め': [0.98, 0.99, 1.0, 1.03, 1.07],
+const STATUS_LABELS: Record<Exclude<ConditionStatus, null>, string> = {
+  FULL_RENO_INSULATED: 'フルリノベーション+断熱',
+  FULL_RENO_HIGH_DESIGN: 'フルリノベーション(デザイン性・快適性良好)',
+  FULL_REFORM_ALL_EQUIP: 'フルリフォーム(設備全て交換)',
+  PARTIAL_REFORM: '一部リフォーム',
+  OWNER_OCCUPIED: '売主居住中',
+  NEEDS_RENOVATION: '改修必要',
+  INVESTMENT_PROPERTY: '収益物件',
 }
 
 function toErrorMessage(e: unknown): string {
@@ -60,157 +67,215 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-function parseDate(s: string | null): Date | null {
-  if (!s) return null
-  const d = new Date(s)
-  return Number.isNaN(+d) ? null : d
+function effectivePrice(row: EntryRow): number | null {
+  if (typeof row.contract_price === 'number' && Number.isFinite(row.contract_price)) return row.contract_price
+  if (typeof row.max_price === 'number' && Number.isFinite(row.max_price)) return row.max_price
+  if (typeof row.past_min === 'number' && Number.isFinite(row.past_min)) return row.past_min
+  return null
 }
 
-function diffDays(a: string | null, b: string | null): number {
-  const da = parseDate(a); const db = parseDate(b)
-  if (!da || !db) return 0
-  const ms = Math.abs(+da - +db)
-  return Math.round(ms / 86400000)
+function effectiveUnitPrice(row: EntryRow): number | null {
+  if (typeof row.unit_price === 'number' && Number.isFinite(row.unit_price)) return row.unit_price
+  const price = effectivePrice(row)
+  if (price == null || typeof row.area_sqm !== 'number' || row.area_sqm <= 0) return null
+  return Math.round((price / row.area_sqm) * 100) / 100
 }
 
-function fmtYen(n: number): string { return n.toLocaleString('ja-JP') + '円' }
-function fmtUnit(n: number): string { return fmtYen(n) + '/㎡' }
-function safeNum(n: number | null | undefined): number { return typeof n === 'number' && Number.isFinite(n) ? n : 0 }
+function parseDate(value: string | null): Date | null {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function diffDays(a: string | null, b: string | null): number | null {
+  const da = parseDate(a)
+  const db = parseDate(b)
+  if (!da || !db) return null
+  return Math.round((db.getTime() - da.getTime()) / 86400000)
+}
+
+function formatDate(value: string | null): string {
+  const d = parseDate(value)
+  if (!d) return '—'
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatYm(value: string | null): string {
+  if (!value) return '—'
+  const datePart = value.includes('T') ? value.slice(0, 10) : value
+  if (datePart.length < 7) return '—'
+  return datePart.slice(0, 7)
+}
+
+function formatYen(value: number | null): string {
+  if (value == null) return '—'
+  return `${Math.round(value).toLocaleString('ja-JP')}円`
+}
+
+function formatUnit(value: number | null): string {
+  if (value == null) return '—'
+  return `${value.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円/㎡`
+}
+
+function statusLabel(value: ConditionStatus): string {
+  if (!value) return '—'
+  return STATUS_LABELS[value] ?? '—'
+}
 
 export default function TabListClient() {
   const supabase = getSupabase()
   const searchParams = useSearchParams()
-  const [complexes, setComplexes] = useState<ComplexOption[]>([])
-  const [selectedComplexId, setSelectedComplexId] = useState<string>('')
-  const [floorPattern, setFloorPattern] = useState<string | null>(null)
 
-  const [entries, setEntries] = useState<Card[]>([])
-  const [loading, setLoading] = useState(false)
+  const [complexes, setComplexes] = useState<ComplexOption[]>([])
+  const [selectedComplexId, setSelectedComplexId] = useState('')
+  const [loadingComplexes, setLoadingComplexes] = useState(false)
+
+  const [entries, setEntries] = useState<EntryRow[]>([])
+  const [loadingEntries, setLoadingEntries] = useState(false)
   const [msg, setMsg] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('contract_date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [labelFilter, setLabelFilter] = useState<LabelFilter>('all')
+
+  const [openingPdfId, setOpeningPdfId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
-
 
   useEffect(() => {
     let mounted = true
     async function loadComplexes() {
+      setLoadingComplexes(true)
       try {
         const { data, error } = await supabase
           .from('housing_complexes')
-          .select('id, name, pref, city, floor_coef_pattern')
+          .select('id, name, pref, city, town, station_name, station_access_type, station_minutes, unit_count')
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
         if (error) throw error
-        const list = (data ?? []).map((c) => ({
-          id: c.id as string,
-          name: (c.name as string) ?? '(名称未設定)',
-          pref: (c.pref as string | null) ?? null,
-          city: (c.city as string | null) ?? null,
-          floorPattern: (c.floor_coef_pattern as string | null) ?? null,
+        const list = (data ?? []).map((row) => ({
+          id: row.id as string,
+          name: (row.name as string | null) ?? '(名称未設定)',
+          pref: (row.pref as string | null) ?? null,
+          city: (row.city as string | null) ?? null,
+          town: (row.town as string | null) ?? null,
+          stationName: (row.station_name as string | null) ?? null,
+          stationAccessType: (row.station_access_type as string | null) ?? null,
+          stationMinutes: (row.station_minutes as number | null) ?? null,
+          unitCount: (row.unit_count as number | null) ?? null,
         }))
-        if (mounted) {
-          setComplexes(list)
-          const qsId = searchParams?.get('complexId') ?? ''
-          const preselect = qsId || selectedComplexId
-          const cur = preselect ? list.find((x) => x.id === preselect) : undefined
-          if (cur) {
-            setSelectedComplexId(cur.id)
-            setFloorPattern(cur.floorPattern ?? null)
-          } else if (list[0]) {
-            setSelectedComplexId(list[0].id)
-            setFloorPattern(list[0].floorPattern ?? null)
-          }
-        }
+        if (!mounted) return
+        setComplexes(list)
+        const requested = searchParams?.get('complexId') ?? ''
+        setSelectedComplexId((prev) => {
+          if (requested && list.some((item) => item.id === requested)) return requested
+          if (prev && list.some((item) => item.id === prev)) return prev
+          return list[0]?.id ?? ''
+        })
       } catch (e) {
         console.error(e)
         if (mounted) setMsg('団地一覧の取得に失敗しました: ' + toErrorMessage(e))
+      } finally {
+        if (mounted) setLoadingComplexes(false)
       }
     }
     loadComplexes()
     return () => { mounted = false }
-  }, [supabase, selectedComplexId, searchParams])
+  }, [supabase, searchParams])
 
   useEffect(() => {
     if (!selectedComplexId) return
     let mounted = true
     async function loadEntries() {
-      setLoading(true); setMsg('')
+      setLoadingEntries(true)
+      setMsg('')
       try {
+        const nextSelect = 'id, contract_kind, floor, area_sqm, contract_price, unit_price, built_month, building_no, condition_status, has_elevator, reins_registered_date, contract_date, max_price, past_min, mysoku_pdf_path, created_at'
+        const legacySelect = 'id, contract_kind, floor, area_sqm, has_elevator, reins_registered_date, contract_date, max_price, past_min, mysoku_pdf_path, created_at'
+
         const { data, error } = await supabase
           .from('estate_entries')
-          .select('id, contract_kind, floor, area_sqm, layout, reins_registered_date, contract_date, max_price, past_min, coef_total, interior_level_coef, contract_year_coef')
+          .select(nextSelect)
           .eq('complex_id', selectedComplexId)
           .is('deleted_at', null)
-          .order('contract_date', { ascending: false, nullsFirst: false })
-          .limit(500)
-        if (error) throw error
-        const rows = (data ?? []) as EntryRow[]
-        const pattern = floorPattern ?? ''
-        const coefArr = floorCoefs[pattern] ?? null
-        const mapped: Card[] = ['MAX', 'MINI'].map((kind) => {
-          const list = rows.filter((r) => r.contract_kind === kind)
-          if (list.length === 0) return null
-          const base = list[0]
-          const area = safeNum(base.area_sqm)
-          const price = kind === 'MAX' ? safeNum(base.max_price) : safeNum(base.past_min)
-          const unit = area > 0 ? Math.round(price / area) : 0
-          const baseCoef = safeNum(base.coef_total ?? (safeNum(base.interior_level_coef) + safeNum(base.contract_year_coef))) || 1
-          const floors = (coefArr ?? [1, 1, 1, 1, 1]).map((c, idx) => {
-            const predictedUnit = Math.round(unit * c)
-            const targetUnit = Math.round(unit * baseCoef * c)
-            const targetClose = Math.round(targetUnit * area)
-            const raiseFloat = targetClose / 1.21
-            const raise = Math.floor(raiseFloat / 10000) * 10000
-            const moveCost = area < 60 ? Math.round(area * 132000) : (area >= 80 ? Math.round(area * 123000) : Math.round(area * (132000 - (area - 60) * 400)))
-            const brokerage = raise < 10_000_000 ? 550_000 : Math.round(raise * 0.055)
-            const other = Math.round(raise * 0.075)
-            const buyTarget = raise - moveCost - brokerage - other
-            const buyTargetUnit = area > 0 ? Math.round(buyTarget / area) : 0
-            return { floor: idx + 1, predictedUnit, targetUnit, raise, buyTargetUnit }
-          })
-          return {
-            kind: kind as 'MAX' | 'MINI',
-            entryId: base.id,
-            summary: {
-              unit,
-              floor: base.floor,
-              price,
-              area,
-              layout: (base.layout ?? '').trim(),
-              reins: base.reins_registered_date ?? '',
-              contract: base.contract_date ?? '',
-              days: diffDays(base.reins_registered_date, base.contract_date),
-              coefTotal: baseCoef,
-            },
-            floors,
-          }
-        }).filter(Boolean) as Card[]
-        if (mounted) setEntries(mapped)
+          .order('created_at', { ascending: false })
+          .limit(5000)
+
+        if (error) {
+          const maybeMissingColumn = /column .* does not exist/i.test(error.message)
+          if (!maybeMissingColumn) throw error
+
+          const { data: legacyData, error: legacyError } = await supabase
+            .from('estate_entries')
+            .select(legacySelect)
+            .eq('complex_id', selectedComplexId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(5000)
+          if (legacyError) throw legacyError
+
+          const mapped = (legacyData ?? []).map((row) => ({
+            ...(row as Omit<EntryRow, 'contract_price' | 'unit_price' | 'built_month' | 'building_no' | 'condition_status'>),
+            contract_price: null,
+            unit_price: null,
+            built_month: null,
+            building_no: null,
+            condition_status: null,
+          })) as EntryRow[]
+          if (mounted) setEntries(mapped)
+          return
+        }
+
+        if (mounted) setEntries((data ?? []) as EntryRow[])
       } catch (e) {
         console.error(e)
         if (mounted) setMsg('成約一覧の取得に失敗しました: ' + toErrorMessage(e))
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted) setLoadingEntries(false)
       }
     }
     loadEntries()
     return () => { mounted = false }
-  }, [supabase, selectedComplexId, floorPattern, reloadKey])
+  }, [supabase, selectedComplexId, reloadKey])
 
-  const filtered = entries
+  const selectedComplex = useMemo(
+    () => complexes.find((complex) => complex.id === selectedComplexId) ?? null,
+    [complexes, selectedComplexId],
+  )
+
+  const filteredAndSorted = useMemo(() => {
+    const filtered = entries.filter((row) => {
+      if (labelFilter === 'all') return true
+      if (labelFilter === 'none') return row.contract_kind == null
+      return row.contract_kind === labelFilter
+    })
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortKey === 'contract_price') {
+        const av = effectivePrice(a) ?? Number.NEGATIVE_INFINITY
+        const bv = effectivePrice(b) ?? Number.NEGATIVE_INFINITY
+        return av - bv
+      }
+      if (sortKey === 'contract_date') {
+        const av = parseDate(a.contract_date)?.getTime() ?? Number.NEGATIVE_INFINITY
+        const bv = parseDate(b.contract_date)?.getTime() ?? Number.NEGATIVE_INFINITY
+        return av - bv
+      }
+      if (sortKey === 'condition_status') {
+        return statusLabel(a.condition_status).localeCompare(statusLabel(b.condition_status), 'ja')
+      }
+      const av = typeof a.floor === 'number' ? a.floor : Number.NEGATIVE_INFINITY
+      const bv = typeof b.floor === 'number' ? b.floor : Number.NEGATIVE_INFINITY
+      return av - bv
+    })
+
+    return sortDirection === 'asc' ? sorted : sorted.reverse()
+  }, [entries, labelFilter, sortKey, sortDirection])
 
   const headerMsg = useMemo(() => {
-    if (loading) return '読み込み中...'
+    if (loadingComplexes || loadingEntries) return '読み込み中...'
     if (msg) return msg
-    return `全${filtered.length}件`
-  }, [loading, msg, filtered.length])
-
-  const selectedComplexName = useMemo(() => {
-    const c = complexes.find((x) => x.id === selectedComplexId)
-    if (!c) return '団地未選択'
-    const loc = [c.pref ?? '', c.city ?? ''].filter(Boolean).join(' / ')
-    return `${c.name}${loc ? `（${loc}）` : ''}`
-  }, [complexes, selectedComplexId])
+    return `全${filteredAndSorted.length}件`
+  }, [loadingComplexes, loadingEntries, msg, filteredAndSorted.length])
 
   async function handleDelete(entryId: string) {
     const ok = window.confirm('この過去成約を削除しますか？')
@@ -237,6 +302,36 @@ export default function TabListClient() {
     }
   }
 
+  async function handleOpenPdf(entryId: string, path: string | null) {
+    if (!path) return
+    setOpeningPdfId(entryId)
+    try {
+      const { data, error } = await supabase
+        .storage
+        .from('uploads')
+        .createSignedUrl(path, 600)
+      if (error) throw error
+      if (!data?.signedUrl) throw new Error('PDF URLの生成に失敗しました')
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      console.error('[entries:pdf]', e)
+      setMsg('PDF表示に失敗しました: ' + toErrorMessage(e))
+    } finally {
+      setOpeningPdfId(null)
+    }
+  }
+
+  const locationText = useMemo(() => {
+    if (!selectedComplex) return '—'
+    return [selectedComplex.pref ?? '', selectedComplex.city ?? '', selectedComplex.town ?? ''].filter(Boolean).join(' ') || '—'
+  }, [selectedComplex])
+
+  const stationText = useMemo(() => selectedComplex?.stationName ?? '—', [selectedComplex])
+  const stationWalkText = useMemo(() => {
+    if (!selectedComplex || selectedComplex.stationMinutes == null) return '—'
+    return `${selectedComplex.stationAccessType ?? '徒歩'}${selectedComplex.stationMinutes}分`
+  }, [selectedComplex])
+
   return (
     <RequireAuth>
       <div className="bg-gray-50 text-gray-900 min-h-screen">
@@ -246,7 +341,7 @@ export default function TabListClient() {
               <div className="h-8 w-8 rounded-xl bg-gray-900 text-white grid place-items-center font-bold">DX</div>
               <div>
                 <h1 className="text-lg font-semibold">過去成約一覧（団地別）</h1>
-                <p className="text-xs text-gray-500">団地1件に対する階別の MAX / MINI 成約履歴</p>
+                <p className="text-xs text-gray-500">1成約1行で全件を表示・並び替え</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-sm">
@@ -261,6 +356,7 @@ export default function TabListClient() {
               <li><Link href="/tab-complex-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">団地一覧</Link></li>
               <li><Link href="/tab-complex" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">団地基本情報</Link></li>
               <li><Link href="/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">過去成約登録</Link></li>
+              <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">過去成約一覧</span></li>
               <li><Link href="/tab-stock-reg" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">在庫登録</Link></li>
             </ul>
           </nav>
@@ -272,98 +368,158 @@ export default function TabListClient() {
               <div className="flex flex-wrap items-center gap-3">
                 <div>
                   <div className="text-sm text-gray-500">対象団地</div>
-                  <div className="text-xl font-semibold">{selectedComplexName}</div>
-                  <div className="text-xs text-gray-500">階数効用: {floorPattern || '未設定'}</div>
+                  <div className="text-xl font-semibold">{selectedComplex?.name ?? '団地未選択'}</div>
+                  <div className="text-xs text-gray-500">{locationText} / 最寄: {stationText} / {stationWalkText}</div>
                 </div>
                 <span className="flex-1" />
-                <div className="flex items-center gap-2 text-sm">
-                  <label className="flex items-center gap-1">表示件数
-                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">{filtered.length}</span>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <label className="flex items-center gap-1">団地
+                    <select
+                      className="border rounded-lg px-2 py-1"
+                      value={selectedComplexId}
+                      onChange={(e) => setSelectedComplexId(e.target.value)}
+                      disabled={loadingComplexes}
+                    >
+                      {complexes.map((complex) => (
+                        <option key={complex.id} value={complex.id}>
+                          {complex.name} {complex.pref ?? ''}{complex.city ? ` ${complex.city}` : ''}
+                        </option>
+                      ))}
+                      {complexes.length === 0 && <option value="">団地なし</option>}
+                    </select>
                   </label>
-                  <label className="flex items-center gap-1">状態
-                    <span className="text-gray-500">{headerMsg}</span>
+                  <label className="flex items-center gap-1">ラベル
+                    <select className="border rounded-lg px-2 py-1" value={labelFilter} onChange={(e) => setLabelFilter(e.target.value as LabelFilter)}>
+                      <option value="all">すべて</option>
+                      <option value="MAX">MAX</option>
+                      <option value="MINI">MINI</option>
+                      <option value="none">ラベルなし</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">並び替え
+                    <select className="border rounded-lg px-2 py-1" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+                      <option value="contract_price">成約価格</option>
+                      <option value="contract_date">成約年月日</option>
+                      <option value="condition_status">状態</option>
+                      <option value="floor">階数</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">順序
+                    <select className="border rounded-lg px-2 py-1" value={sortDirection} onChange={(e) => setSortDirection(e.target.value as SortDirection)}>
+                      <option value="desc">降順</option>
+                      <option value="asc">昇順</option>
+                    </select>
                   </label>
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-1 gap-3">
-                <section className="bg-white rounded-2xl shadow overflow-hidden border">
-                  <div className="border-b p-4 flex items-center justify-between text-sm text-gray-600">
-                    <span>過去成約カード（階別 / MAX・MINI）</span>
-                    <div className="text-xs text-gray-500">買付目標額は募集総額からリノベ予算・アップフロント・その他を控除</div>
-                  </div>
-                  <div className="divide-y" id="entries">
-                    {filtered.map((d) => (
-                      <article key={d.kind} className="p-4 border-b last:border-b-0 hover:bg-gray-50 flex flex-col gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${d.kind === 'MAX' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{d.kind}</span>
-                          <span className="text-sm text-gray-700 font-semibold">㎡単価: {d.summary.unit ? fmtUnit(d.summary.unit) : '—'}</span>
-                          <span className="text-sm text-gray-600">階数: {d.summary.floor != null ? `${d.summary.floor}階` : '—'}</span>
-                          <span className="text-sm text-gray-600">成約価格（㎡数）: <span className="font-semibold num">{d.summary.price ? fmtYen(d.summary.price) : '—'}</span></span>
-                        </div>
-                        <div className="grid md:grid-cols-5 gap-3 text-sm">
-                          <div><div className="text-gray-500">登録日</div><div>{d.summary.reins || '—'}</div></div>
-                          <div><div className="text-gray-500">成約日</div><div>{d.summary.contract || '—'}</div></div>
-                          <div><div className="text-gray-500">間取り</div><div>{d.summary.layout || '—'}</div></div>
-                          <div><div className="text-gray-500">面積</div><div className="num">{d.summary.area ? `${d.summary.area.toFixed(2)}㎡` : '—'}</div></div>
-                          <div><div className="text-gray-500">日数</div><div className="num">{d.summary.days ? `${d.summary.days}日` : '—'}</div></div>
-                        </div>
-                        <div className="overflow-auto rounded-xl border border-gray-200 bg-gray-50">
-                          <table className="w-full text-xs">
-                            <thead className="text-gray-600 bg-gray-100">
-                              <tr>
-                                <th className="text-left py-2 px-2">階</th>
-                                <th className="text-right py-2 px-2">階別成約単価(予測)</th>
-                                {d.kind === 'MAX' ? (
-                                  <>
-                                    <th className="text-right py-2 px-2">目標成約価格</th>
-                                    <th className="text-right py-2 px-2">募集総額（目安）</th>
-                                    <th className="text-right py-2 px-2">買付目標価格</th>
-                                  </>
-                                ) : null}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {d.floors.map((f) => (
-                                <tr className="border-t" key={`${d.kind}-${f.floor}`}>
-                                  <td className="py-2 px-2">{f.floor}F</td>
-                                  <td className="py-2 px-2 text-right num">{f.predictedUnit ? fmtUnit(f.predictedUnit) : '—'}</td>
-                                  {d.kind === 'MAX' ? (
-                                    <>
-                                      <td className="py-2 px-2 text-right num">{f.targetUnit ? fmtUnit(f.targetUnit) : '—'}</td>
-                                      <td className="py-2 px-2 text-right num">{f.raise ? fmtYen(f.raise) : '—'}</td>
-                                      <td className="py-2 px-2 text-right text-emerald-700 font-semibold num">{f.buyTargetUnit ? fmtUnit(f.buyTargetUnit) : '—'}</td>
-                                    </>
-                                  ) : null}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-sm">
-                          <Link className="underline text-blue-700" href={`/tab-regist/${encodeURIComponent(d.entryId)}/edit`}>編集</Link>
-                          <button
-                            type="button"
-                            className="underline text-red-700 disabled:opacity-50"
-                            onClick={() => { handleDelete(d.entryId).catch(console.error) }}
-                            disabled={deletingId === d.entryId}
-                          >
-                            {deletingId === d.entryId ? '削除中...' : '削除'}
-                          </button>
-                          <span className="h-4 w-px bg-gray-200" aria-hidden="true" />
-                          <Link className="underline text-blue-700" href={`/tab-stock?complexId=${encodeURIComponent(selectedComplexId)}`}>在庫一覧へ</Link>
-                          <Link className="underline text-blue-700" href="/tab-stock-reg">在庫登録へ</Link>
-                        </div>
-                      </article>
-                    ))}
-                    {!loading && filtered.length === 0 && (
-                      <div className="p-6 text-sm text-gray-500">条件に一致する成約がありません。</div>
+              <div className="text-sm text-gray-500">{headerMsg}</div>
+
+              <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+                <table className="min-w-[2300px] w-full text-xs">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      <th className="text-left p-2 border-b">#</th>
+                      <th className="text-left p-2 border-b">ラベル</th>
+                      <th className="text-left p-2 border-b">1 団地名</th>
+                      <th className="text-left p-2 border-b">2 所在地</th>
+                      <th className="text-left p-2 border-b">3 最寄り駅</th>
+                      <th className="text-left p-2 border-b">4 最寄り駅からの徒歩時間</th>
+                      <th className="text-left p-2 border-b">5 総戸数</th>
+                      <th className="text-left p-2 border-b">6 エレベーター</th>
+                      <th className="text-left p-2 border-b">7 築年月</th>
+                      <th className="text-left p-2 border-b">8 棟番号</th>
+                      <th className="text-left p-2 border-b">9 階数</th>
+                      <th className="text-left p-2 border-b">10 成約価格</th>
+                      <th className="text-left p-2 border-b">11 ㎡数</th>
+                      <th className="text-left p-2 border-b">12 ㎡単価</th>
+                      <th className="text-left p-2 border-b">13 レインズ登録年月日</th>
+                      <th className="text-left p-2 border-b">14 レインズ成約年月日</th>
+                      <th className="text-left p-2 border-b">15 経過日数</th>
+                      <th className="text-left p-2 border-b">16 状態</th>
+                      <th className="text-left p-2 border-b">PDF</th>
+                      <th className="text-left p-2 border-b">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSorted.map((row, idx) => {
+                      const price = effectivePrice(row)
+                      const unitPrice = effectiveUnitPrice(row)
+                      const elapsedDays = diffDays(row.reins_registered_date, row.contract_date)
+                      const label = row.contract_kind ?? ''
+                      return (
+                        <tr key={row.id} className="border-b align-top hover:bg-gray-50">
+                          <td className="p-2">{idx + 1}</td>
+                          <td className="p-2">
+                            {label ? (
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${label === 'MAX' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {label}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="p-2">{selectedComplex?.name ?? '—'}</td>
+                          <td className="p-2">{locationText}</td>
+                          <td className="p-2">{stationText}</td>
+                          <td className="p-2">{stationWalkText}</td>
+                          <td className="p-2">{selectedComplex?.unitCount != null ? `${selectedComplex.unitCount}戸` : '—'}</td>
+                          <td className="p-2">{row.has_elevator === true ? 'あり' : row.has_elevator === false ? 'なし' : 'スキップ'}</td>
+                          <td className="p-2">{formatYm(row.built_month)}</td>
+                          <td className="p-2">{row.building_no ?? '—'}</td>
+                          <td className="p-2">{row.floor ?? '—'}</td>
+                          <td className="p-2">{formatYen(price)}</td>
+                          <td className="p-2">{typeof row.area_sqm === 'number' ? `${row.area_sqm.toFixed(2)}㎡` : '—'}</td>
+                          <td className="p-2">{formatUnit(unitPrice)}</td>
+                          <td className="p-2">{formatDate(row.reins_registered_date)}</td>
+                          <td className="p-2">{formatDate(row.contract_date)}</td>
+                          <td className="p-2">{elapsedDays == null ? '—' : `${elapsedDays}日`}</td>
+                          <td className="p-2">{statusLabel(row.condition_status)}</td>
+                          <td className="p-2">
+                            {row.mysoku_pdf_path ? (
+                              <button
+                                type="button"
+                                className="underline text-blue-700 disabled:opacity-50"
+                                disabled={openingPdfId === row.id}
+                                onClick={() => { handleOpenPdf(row.id, row.mysoku_pdf_path).catch(console.error) }}
+                              >
+                                {openingPdfId === row.id ? '表示中...' : '表示'}
+                              </button>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="p-2">
+                            <button
+                              type="button"
+                              className="underline text-red-700 disabled:opacity-50"
+                              onClick={() => { handleDelete(row.id).catch(console.error) }}
+                              disabled={deletingId === row.id}
+                            >
+                              {deletingId === row.id ? '削除中...' : '削除'}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {!loadingEntries && filteredAndSorted.length === 0 && (
+                      <tr>
+                        <td className="p-6 text-sm text-gray-500" colSpan={20}>条件に一致する成約がありません。</td>
+                      </tr>
                     )}
-                    {loading && (
-                      <div className="p-6 text-sm text-gray-500">読み込み中...</div>
+                    {loadingEntries && (
+                      <tr>
+                        <td className="p-6 text-sm text-gray-500" colSpan={20}>読み込み中...</td>
+                      </tr>
                     )}
-                  </div>
-                </section>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <Link className="underline text-blue-700" href="/tab-regist">過去成約を追加</Link>
+                <Link className="underline text-blue-700" href={`/tab-stock?complexId=${encodeURIComponent(selectedComplexId)}`}>在庫一覧へ</Link>
+                <Link className="underline text-blue-700" href="/tab-stock-reg">在庫登録へ</Link>
               </div>
             </div>
           </section>
