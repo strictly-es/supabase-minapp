@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Suspense, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabaseClient'
@@ -221,7 +221,7 @@ function compareRows(a: DealRow, b: DealRow, key: SortKey): number {
   return Number.parseInt(a.id, 10) - Number.parseInt(b.id, 10)
 }
 
-export default function TabRegistPage() {
+function TabRegistPageContent() {
   const supabase = getSupabase()
   const searchParams = useSearchParams()
 
@@ -730,5 +730,13 @@ export default function TabRegistPage() {
         </main>
       </div>
     </RequireAuth>
+  )
+}
+
+export default function TabRegistPage() {
+  return (
+    <Suspense fallback={null}>
+      <TabRegistPageContent />
+    </Suspense>
   )
 }
