@@ -15,7 +15,6 @@ type FormState = {
   area: string
   layout: string
   registered: string
-  contract: string
   maxUnit: string
   coefTotal: string
 }
@@ -34,7 +33,6 @@ const initialForm: FormState = {
   area: '',
   layout: '',
   registered: '',
-  contract: '',
   maxUnit: '',
   coefTotal: '1.00',
 }
@@ -219,7 +217,6 @@ export default function StockRegPage() {
         area_sqm: area,
         layout: form.layout.trim() || null,
         registered_date: form.registered || null,
-        contract_date: form.contract || null,
         list_price: target?.targetClose ?? null,
         base_unit_price: baseUnit || null,
         coef_total: baseCoef || null,
@@ -318,7 +315,6 @@ export default function StockRegPage() {
                     <label className="block">面積（㎡）<input name="area" type="number" min="0" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="55.20" value={form.area} onChange={onFormChange('area')} /></label>
                     <label className="block">間取り<input name="layout" type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3LDK" value={form.layout} onChange={onFormChange('layout')} /></label>
                     <label className="block">登録年月日<input name="registered" type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.registered} onChange={onFormChange('registered')} /></label>
-                    <label className="block">成約（予定）年月日<input name="contract" type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.contract} onChange={onFormChange('contract')} /></label>
                     <label className="block md:col-span-3">マイソク添付<input type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} /></label>
                   </div>
                 </section>

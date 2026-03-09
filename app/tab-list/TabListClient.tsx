@@ -64,7 +64,7 @@ type EntryDraft = {
   area_sqm: string
   reins_registered_date: string
   contract_date: string
-  condition_status: ConditionStatus | ''
+  condition_status: Exclude<ConditionStatus, null> | ''
 }
 
 const STATUS_LABELS: Record<Exclude<ConditionStatus, null>, string> = {
