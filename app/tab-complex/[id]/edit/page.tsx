@@ -28,6 +28,10 @@ type ComplexForm = {
   mgmtType: '' | '自主管理' | '一部委託' | '全部委託'
   buildingStructure: BuildingStructure
   floorCount: string
+  sameAddressNewSeismicCase: string
+  sameAddressOldSeismicCase: string
+  sameStationNewSeismicCase: string
+  sameStationOldSeismicCase: string
 }
 
 type EvalOption = { value: string; label: string; score: number }
@@ -176,6 +180,10 @@ const initialComplex: ComplexForm = {
   mgmtType: '',
   buildingStructure: '',
   floorCount: '',
+  sameAddressNewSeismicCase: '',
+  sameAddressOldSeismicCase: '',
+  sameStationNewSeismicCase: '',
+  sameStationOldSeismicCase: '',
 }
 
 function toErrorMessage(e: unknown): string {
@@ -228,7 +236,9 @@ export default function TabComplexEditPage() {
             id, name, pref, city, town, built_ym,
             station_name, station_access_type, station_minutes,
             unit_count, building_structure, floor_count,
-            seller, builder, mgmt_company, mgmt_type, map_url
+            seller, builder, mgmt_company, mgmt_type, map_url,
+            same_address_new_seismic_case, same_address_old_seismic_case,
+            same_station_new_seismic_case, same_station_old_seismic_case
           `)
           .eq('id', id)
           .maybeSingle()
@@ -255,6 +265,10 @@ export default function TabComplexEditPage() {
             mgmtType: (data.mgmt_type ?? '') as ComplexForm['mgmtType'],
             buildingStructure: (data.building_structure ?? '') as ComplexForm['buildingStructure'],
             floorCount: typeof data.floor_count === 'number' ? String(data.floor_count) : '',
+            sameAddressNewSeismicCase: data.same_address_new_seismic_case ?? '',
+            sameAddressOldSeismicCase: data.same_address_old_seismic_case ?? '',
+            sameStationNewSeismicCase: data.same_station_new_seismic_case ?? '',
+            sameStationOldSeismicCase: data.same_station_old_seismic_case ?? '',
           })
         }
 
@@ -348,6 +362,10 @@ export default function TabComplexEditPage() {
         unit_count: toInt(form.unitCount),
         building_structure: form.buildingStructure || null,
         floor_count: toInt(form.floorCount),
+        same_address_new_seismic_case: form.sameAddressNewSeismicCase.trim() || null,
+        same_address_old_seismic_case: form.sameAddressOldSeismicCase.trim() || null,
+        same_station_new_seismic_case: form.sameStationNewSeismicCase.trim() || null,
+        same_station_old_seismic_case: form.sameStationOldSeismicCase.trim() || null,
         updated_by: user.id,
       }
 
@@ -524,6 +542,24 @@ export default function TabComplexEditPage() {
                   </label>
                   <label className="block">階数
                     <input type="number" min="1" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）5" value={form.floorCount} onChange={onComplexChange('floorCount')} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="font-semibold">成約事例</h3>
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <label className="block">同住所の成約事例 - 新耐震の価格とm²単価
+                    <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）2,480万円 / 38.1万円/m²" value={form.sameAddressNewSeismicCase} onChange={onComplexChange('sameAddressNewSeismicCase')} />
+                  </label>
+                  <label className="block">同住所の成約事例 - 旧耐震の価格とm²単価
+                    <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）1,980万円 / 31.4万円/m²" value={form.sameAddressOldSeismicCase} onChange={onComplexChange('sameAddressOldSeismicCase')} />
+                  </label>
+                  <label className="block">同駅(徒歩10分圏)の成約事例 - 新耐震の価格とm²単価
+                    <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）2,980万円 / 45.0万円/m²" value={form.sameStationNewSeismicCase} onChange={onComplexChange('sameStationNewSeismicCase')} />
+                  </label>
+                  <label className="block">同駅(徒歩10分圏)の成約事例 - 旧耐震の価格とm²単価
+                    <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）2,180万円 / 33.8万円/m²" value={form.sameStationOldSeismicCase} onChange={onComplexChange('sameStationOldSeismicCase')} />
                   </label>
                 </div>
               </section>

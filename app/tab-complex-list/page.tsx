@@ -49,8 +49,11 @@ type Card = {
   maxUnitPrice: number | null
   miniPrice: number | null
   miniUnitPrice: number | null
+  miniElapsedDays: number | null
   stockCount: number
   stockDaysOldest: number | null
+  stockAlertDays: number | null
+  showStockTimingAlert: boolean
 }
 
 type EntrySummaryRow = {
@@ -59,6 +62,7 @@ type EntrySummaryRow = {
   max_price: number | null
   past_min: number | null
   area_sqm: number | null
+  reins_registered_date: string | null
   contract_date: string | null
 }
 
@@ -118,6 +122,14 @@ function calcUnitPrice(price: number | null | undefined, area: number | null | u
   return Math.round(p / a)
 }
 
+function diffDays(start: string | null, end: string | null): number | null {
+  if (!start || !end) return null
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000)
+}
+
 function diffFromTodayDays(date: string | null): number | null {
   if (!date) return null
   const d = new Date(date)
@@ -130,6 +142,8 @@ function fmtYen(n: number | null): string {
   if (n == null) return '—'
   return `${Math.round(n).toLocaleString('ja-JP')}円`
 }
+
+const STOCK_ALERT_LEAD_DAYS = 5
 
 export default function TabComplexListPage() {
   const supabase = getSupabase()
@@ -164,13 +178,13 @@ export default function TabComplexListPage() {
         const ids = rows.map((r) => r.id).filter(Boolean)
         const areaByComplex = new Map<string, number>()
         const maxDealByComplex = new Map<string, { price: number | null; unitPrice: number | null }>()
-        const miniDealByComplex = new Map<string, { price: number | null; unitPrice: number | null }>()
+        const miniDealByComplex = new Map<string, { price: number | null; unitPrice: number | null; elapsedDays: number | null }>()
         const stockCountByComplex = new Map<string, number>()
         const oldestRegisteredByComplex = new Map<string, string>()
         if (ids.length > 0) {
           const { data: entryData, error: entryError } = await supabase
             .from('estate_entries')
-            .select('complex_id, contract_kind, max_price, past_min, area_sqm, contract_date')
+            .select('complex_id, contract_kind, max_price, past_min, area_sqm, reins_registered_date, contract_date')
             .in('complex_id', ids)
             .is('deleted_at', null)
             .order('contract_date', { ascending: false, nullsFirst: false })
@@ -193,6 +207,7 @@ export default function TabComplexListPage() {
                 miniDealByComplex.set(row.complex_id, {
                   price: toValidNumber(row.past_min),
                   unitPrice: calcUnitPrice(row.past_min, row.area_sqm),
+                  elapsedDays: diffDays(row.reins_registered_date, row.contract_date),
                 })
               }
             }
@@ -235,6 +250,8 @@ export default function TabComplexListPage() {
           const miniDeal = miniDealByComplex.get(r.id)
           const stockCount = stockCountByComplex.get(r.id) ?? 0
           const stockDaysOldest = diffFromTodayDays(oldestRegisteredByComplex.get(r.id) ?? null)
+          const stockAlertDays = miniDeal?.elapsedDays != null ? Math.max(miniDeal.elapsedDays - STOCK_ALERT_LEAD_DAYS, 0) : null
+          const showStockTimingAlert = stockCount > 0 && stockDaysOldest != null && stockAlertDays != null && stockDaysOldest >= stockAlertDays
           return {
             id: r.id,
             name: r.name,
@@ -256,8 +273,11 @@ export default function TabComplexListPage() {
             maxUnitPrice: maxDeal?.unitPrice ?? null,
             miniPrice: miniDeal?.price ?? null,
             miniUnitPrice: miniDeal?.unitPrice ?? null,
+            miniElapsedDays: miniDeal?.elapsedDays ?? null,
             stockCount,
             stockDaysOldest,
+            stockAlertDays,
+            showStockTimingAlert,
           }
         })
         if (mounted) setCards(mapped)
@@ -477,6 +497,7 @@ export default function TabComplexListPage() {
                               <h3 className="text-lg font-semibold">{c.name}</h3>
                               {c.score != null && <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs">総合 {c.score} / 100</span>}
                               {c.hasElevator && <span className="px-2 py-1 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 text-xs">EVあり</span>}
+                              {c.showStockTimingAlert && <span className="px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100 text-xs">適正仕入れタイミング</span>}
                             </div>
                             <div className="text-sm text-gray-600">{c.addr}</div>
                             <div className="text-xs text-gray-500">{c.station}</div>
@@ -492,11 +513,13 @@ export default function TabComplexListPage() {
                                 <div className="text-[11px] text-teal-500">過去MINI</div>
                                 <div className="font-semibold num">{fmtYen(c.miniPrice)}</div>
                                 <div className="text-[11px]">㎡単価: <span className="num">{c.miniUnitPrice != null ? `${fmtYen(c.miniUnitPrice)}/㎡` : '—'}</span></div>
+                                <div className="text-[11px]">経過日数: <span className="num">{c.miniElapsedDays != null ? `${c.miniElapsedDays}日` : '—'}</span></div>
                               </div>
                               <div className="px-2 py-1.5 rounded-lg bg-gray-100 text-gray-700">
                                 <div className="text-[11px] text-gray-500">現在在庫</div>
                                 <div className="font-semibold">{c.stockCount}件</div>
                                 <div className="text-[11px]">経過日数: <span className="num">{c.stockDaysOldest != null ? `${c.stockDaysOldest}日` : '—'}</span></div>
+                                <div className="text-[11px]">アラート基準: <span className="num">{c.stockAlertDays != null ? `${c.stockAlertDays}日` : '—'}</span></div>
                               </div>
                             </div>
                           </div>

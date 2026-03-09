@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabaseClient'
@@ -19,6 +19,9 @@ type ConditionStatus =
   | 'NEEDS_RENOVATION'
   | 'INVESTMENT_PROPERTY'
   | null
+
+type DealLabel = '' | 'MAX' | 'MINI'
+type ElevatorChoice = 'あり' | 'なし' | 'スキップ'
 
 type ComplexOption = {
   id: string
@@ -51,6 +54,19 @@ type EntryRow = {
   created_at: string
 }
 
+type EntryDraft = {
+  contract_kind: DealLabel
+  has_elevator: ElevatorChoice
+  built_month: string
+  building_no: string
+  floor: string
+  contract_price: string
+  area_sqm: string
+  reins_registered_date: string
+  contract_date: string
+  condition_status: ConditionStatus | ''
+}
+
 const STATUS_LABELS: Record<Exclude<ConditionStatus, null>, string> = {
   FULL_RENO_INSULATED: 'フルリノベーション+断熱',
   FULL_RENO_HIGH_DESIGN: 'フルリノベーション(デザイン性・快適性良好)',
@@ -60,6 +76,16 @@ const STATUS_LABELS: Record<Exclude<ConditionStatus, null>, string> = {
   NEEDS_RENOVATION: '改修必要',
   INVESTMENT_PROPERTY: '収益物件',
 }
+
+const STATUS_OPTIONS: { value: Exclude<ConditionStatus, null>; label: string }[] = [
+  { value: 'FULL_RENO_INSULATED', label: 'フルリノベーション+断熱' },
+  { value: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベーション(デザイン性・快適性良好)' },
+  { value: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム(設備全て交換)' },
+  { value: 'PARTIAL_REFORM', label: '一部リフォーム' },
+  { value: 'OWNER_OCCUPIED', label: '売主居住中' },
+  { value: 'NEEDS_RENOVATION', label: '改修必要' },
+  { value: 'INVESTMENT_PROPERTY', label: '収益物件' },
+]
 
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
@@ -72,6 +98,50 @@ function effectivePrice(row: EntryRow): number | null {
   if (typeof row.max_price === 'number' && Number.isFinite(row.max_price)) return row.max_price
   if (typeof row.past_min === 'number' && Number.isFinite(row.past_min)) return row.past_min
   return null
+}
+
+function toInt(value: string): number | null {
+  if (!value.trim()) return null
+  const n = Number.parseInt(value, 10)
+  return Number.isFinite(n) ? n : null
+}
+
+function toFloat(value: string): number | null {
+  if (!value.trim()) return null
+  const n = Number.parseFloat(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function toDateInput(value: string | null): string {
+  if (!value) return ''
+  return value.includes('T') ? value.slice(0, 10) : value
+}
+
+function toMonthInput(value: string | null): string {
+  if (!value) return ''
+  const datePart = value.includes('T') ? value.slice(0, 10) : value
+  return datePart.slice(0, 7)
+}
+
+function toDateOrNull(value: string): string | null {
+  return value ? value : null
+}
+
+function monthToDateOrNull(value: string): string | null {
+  return value ? `${value}-01` : null
+}
+
+function elevatorToDb(value: ElevatorChoice): boolean | null {
+  if (value === 'あり') return true
+  if (value === 'なし') return false
+  return null
+}
+
+function calcUnitPrice(price: string, area: string): number | null {
+  const p = toFloat(price)
+  const a = toFloat(area)
+  if (p == null || a == null || a <= 0) return null
+  return Math.round((p / a) * 100) / 100
 }
 
 function effectiveUnitPrice(row: EntryRow): number | null {
@@ -94,24 +164,6 @@ function diffDays(a: string | null, b: string | null): number | null {
   return Math.round((db.getTime() - da.getTime()) / 86400000)
 }
 
-function formatDate(value: string | null): string {
-  const d = parseDate(value)
-  if (!d) return '—'
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function formatYm(value: string | null): string {
-  if (!value) return '—'
-  const datePart = value.includes('T') ? value.slice(0, 10) : value
-  if (datePart.length < 7) return '—'
-  return datePart.slice(0, 7)
-}
-
-function formatYen(value: number | null): string {
-  if (value == null) return '—'
-  return `${Math.round(value).toLocaleString('ja-JP')}円`
-}
-
 function formatUnit(value: number | null): string {
   if (value == null) return '—'
   return `${value.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円/㎡`
@@ -120,6 +172,73 @@ function formatUnit(value: number | null): string {
 function statusLabel(value: ConditionStatus): string {
   if (!value) return '—'
   return STATUS_LABELS[value] ?? '—'
+}
+
+function rowToDraft(row: EntryRow): EntryDraft {
+  return {
+    contract_kind: row.contract_kind ?? '',
+    has_elevator: row.has_elevator === true ? 'あり' : row.has_elevator === false ? 'なし' : 'スキップ',
+    built_month: toMonthInput(row.built_month),
+    building_no: typeof row.building_no === 'number' ? String(row.building_no) : '',
+    floor: typeof row.floor === 'number' ? String(row.floor) : '',
+    contract_price: (() => {
+      const price = effectivePrice(row)
+      return typeof price === 'number' ? String(price) : ''
+    })(),
+    area_sqm: typeof row.area_sqm === 'number' ? String(row.area_sqm) : '',
+    reins_registered_date: toDateInput(row.reins_registered_date),
+    contract_date: toDateInput(row.contract_date),
+    condition_status: row.condition_status ?? '',
+  }
+}
+
+function draftEqualsRow(draft: EntryDraft, row: EntryRow): boolean {
+  const current = rowToDraft(row)
+  return JSON.stringify(draft) === JSON.stringify(current)
+}
+
+function applyDraft(row: EntryRow, draft: EntryDraft | undefined): EntryRow {
+  if (!draft) return row
+  const price = toInt(draft.contract_price)
+  const label = draft.contract_kind || null
+  return {
+    ...row,
+    contract_kind: label,
+    has_elevator: elevatorToDb(draft.has_elevator),
+    built_month: monthToDateOrNull(draft.built_month),
+    building_no: toInt(draft.building_no),
+    floor: toInt(draft.floor),
+    contract_price: price,
+    max_price: label === 'MAX' ? price : null,
+    past_min: label === 'MINI' ? price : null,
+    area_sqm: toFloat(draft.area_sqm),
+    unit_price: calcUnitPrice(draft.contract_price, draft.area_sqm),
+    reins_registered_date: toDateOrNull(draft.reins_registered_date),
+    contract_date: toDateOrNull(draft.contract_date),
+    condition_status: draft.condition_status || null,
+  }
+}
+
+function buildLabelSpecificResetPayload(previousKind: EntryRow['contract_kind'], nextKind: DealLabel) {
+  if (previousKind === nextKind) return {}
+  if (nextKind === 'MAX') {
+    return {
+      renovated: null,
+    }
+  }
+  if (nextKind === 'MINI') {
+    return {
+      coef_total: null,
+      interior_level_coef: null,
+      contract_year_coef: null,
+    }
+  }
+  return {
+    coef_total: null,
+    interior_level_coef: null,
+    contract_year_coef: null,
+    renovated: null,
+  }
 }
 
 export default function TabListClient() {
@@ -139,6 +258,8 @@ export default function TabListClient() {
 
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, EntryDraft>>({})
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -221,11 +342,17 @@ export default function TabListClient() {
             building_no: null,
             condition_status: null,
           })) as EntryRow[]
-          if (mounted) setEntries(mapped)
+          if (mounted) {
+            setEntries(mapped)
+            setDrafts({})
+          }
           return
         }
 
-        if (mounted) setEntries((data ?? []) as EntryRow[])
+        if (mounted) {
+          setEntries((data ?? []) as EntryRow[])
+          setDrafts({})
+        }
       } catch (e) {
         console.error(e)
         if (mounted) setMsg('成約一覧の取得に失敗しました: ' + toErrorMessage(e))
@@ -242,8 +369,13 @@ export default function TabListClient() {
     [complexes, selectedComplexId],
   )
 
+  const displayEntries = useMemo(
+    () => entries.map((row) => applyDraft(row, drafts[row.id])),
+    [drafts, entries],
+  )
+
   const filteredAndSorted = useMemo(() => {
-    const filtered = entries.filter((row) => {
+    const filtered = displayEntries.filter((row) => {
       if (labelFilter === 'all') return true
       if (labelFilter === 'none') return row.contract_kind == null
       return row.contract_kind === labelFilter
@@ -269,7 +401,7 @@ export default function TabListClient() {
     })
 
     return sortDirection === 'asc' ? sorted : sorted.reverse()
-  }, [entries, labelFilter, sortKey, sortDirection])
+  }, [displayEntries, labelFilter, sortKey, sortDirection])
 
   const headerMsg = useMemo(() => {
     if (loadingComplexes || loadingEntries) return '読み込み中...'
@@ -299,6 +431,95 @@ export default function TabListClient() {
       setMsg('削除に失敗しました: ' + toErrorMessage(e))
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  function handleDraftChange(entryId: string, key: keyof EntryDraft) {
+    return (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const value = e.target.value
+      setDrafts((prev) => {
+        const row = entries.find((item) => item.id === entryId)
+        if (!row) return prev
+        const next = { ...(prev[entryId] ?? rowToDraft(row)), [key]: value } as EntryDraft
+        return { ...prev, [entryId]: next }
+      })
+    }
+  }
+
+  function handleResetDraft(entryId: string) {
+    setDrafts((prev) => {
+      if (!(entryId in prev)) return prev
+      const next = { ...prev }
+      delete next[entryId]
+      return next
+    })
+  }
+
+  async function handleSave(entryId: string) {
+    const original = entries.find((row) => row.id === entryId)
+    const draft = drafts[entryId]
+    if (!original || !draft || !selectedComplex) return
+    if (draftEqualsRow(draft, original)) {
+      handleResetDraft(entryId)
+      return
+    }
+
+    setSavingId(entryId)
+    setMsg('')
+    try {
+      if (draft.contract_kind) {
+        const { data: conflictRows, error: conflictError } = await supabase
+          .from('estate_entries')
+          .select('id')
+          .eq('complex_id', selectedComplex.id)
+          .eq('contract_kind', draft.contract_kind)
+          .neq('id', entryId)
+          .is('deleted_at', null)
+          .limit(1)
+        if (conflictError) throw conflictError
+        if ((conflictRows ?? []).length > 0) {
+          setMsg(`${draft.contract_kind}ラベルは同じ団地内で1件のみ指定できます`)
+          return
+        }
+      }
+
+      const price = toInt(draft.contract_price)
+      const label = draft.contract_kind || null
+      const nextRow = applyDraft(original, draft)
+      const payload = {
+        estate_name: selectedComplex.name,
+        complex_id: selectedComplex.id,
+        has_elevator: elevatorToDb(draft.has_elevator),
+        built_month: monthToDateOrNull(draft.built_month),
+        building_no: toInt(draft.building_no),
+        floor: toInt(draft.floor),
+        contract_price: price,
+        max_price: label === 'MAX' ? price : null,
+        past_min: label === 'MINI' ? price : null,
+        area_sqm: toFloat(draft.area_sqm),
+        unit_price: calcUnitPrice(draft.contract_price, draft.area_sqm),
+        reins_registered_date: toDateOrNull(draft.reins_registered_date),
+        contract_date: toDateOrNull(draft.contract_date),
+        condition_status: draft.condition_status || null,
+        contract_kind: label,
+        ...buildLabelSpecificResetPayload(original.contract_kind, draft.contract_kind),
+      }
+
+      const { error } = await supabase.from('estate_entries').update(payload).eq('id', entryId)
+      if (error) throw error
+
+      setEntries((prev) => prev.map((row) => (row.id === entryId ? nextRow : row)))
+      setDrafts((prev) => {
+        const next = { ...prev }
+        delete next[entryId]
+        return next
+      })
+      setMsg('更新しました')
+    } catch (e) {
+      console.error('[entries:update]', e)
+      setMsg('更新に失敗しました: ' + toErrorMessage(e))
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -443,38 +664,50 @@ export default function TabListClient() {
                   </thead>
                   <tbody>
                     {filteredAndSorted.map((row, idx) => {
-                      const price = effectivePrice(row)
+                      const originalRow = entries.find((item) => item.id === row.id) ?? row
+                      const draft = drafts[row.id] ?? rowToDraft(originalRow)
+                      const isDirty = Boolean(drafts[row.id]) && !draftEqualsRow(draft, originalRow)
                       const unitPrice = effectiveUnitPrice(row)
                       const elapsedDays = diffDays(row.reins_registered_date, row.contract_date)
-                      const label = row.contract_kind ?? ''
                       return (
                         <tr key={row.id} className="border-b align-top hover:bg-gray-50">
                           <td className="p-2">{idx + 1}</td>
                           <td className="p-2">
-                            {label ? (
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${label === 'MAX' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                                {label}
-                              </span>
-                            ) : (
-                              '—'
-                            )}
+                            <select className="w-20 border rounded px-2 py-1 bg-white" value={draft.contract_kind} onChange={handleDraftChange(row.id, 'contract_kind')}>
+                              <option value="">なし</option>
+                              <option value="MAX">MAX</option>
+                              <option value="MINI">MINI</option>
+                            </select>
                           </td>
                           <td className="p-2">{selectedComplex?.name ?? '—'}</td>
                           <td className="p-2">{locationText}</td>
                           <td className="p-2">{stationText}</td>
                           <td className="p-2">{stationWalkText}</td>
                           <td className="p-2">{selectedComplex?.unitCount != null ? `${selectedComplex.unitCount}戸` : '—'}</td>
-                          <td className="p-2">{row.has_elevator === true ? 'あり' : row.has_elevator === false ? 'なし' : 'スキップ'}</td>
-                          <td className="p-2">{formatYm(row.built_month)}</td>
-                          <td className="p-2">{row.building_no ?? '—'}</td>
-                          <td className="p-2">{row.floor ?? '—'}</td>
-                          <td className="p-2">{formatYen(price)}</td>
-                          <td className="p-2">{typeof row.area_sqm === 'number' ? `${row.area_sqm.toFixed(2)}㎡` : '—'}</td>
+                          <td className="p-2">
+                            <select className="w-24 border rounded px-2 py-1 bg-white" value={draft.has_elevator} onChange={handleDraftChange(row.id, 'has_elevator')}>
+                              <option value="あり">あり</option>
+                              <option value="なし">なし</option>
+                              <option value="スキップ">スキップ</option>
+                            </select>
+                          </td>
+                          <td className="p-2"><input type="month" className="w-36 border rounded px-2 py-1 bg-white" value={draft.built_month} onChange={handleDraftChange(row.id, 'built_month')} /></td>
+                          <td className="p-2"><input type="number" min={0} step={1} className="w-20 border rounded px-2 py-1 bg-white" value={draft.building_no} onChange={handleDraftChange(row.id, 'building_no')} /></td>
+                          <td className="p-2"><input type="number" min={0} step={1} className="w-20 border rounded px-2 py-1 bg-white" value={draft.floor} onChange={handleDraftChange(row.id, 'floor')} /></td>
+                          <td className="p-2"><input type="number" min={0} step={1} className="w-32 border rounded px-2 py-1 bg-white" value={draft.contract_price} onChange={handleDraftChange(row.id, 'contract_price')} /></td>
+                          <td className="p-2"><input type="number" min={0} step={0.01} className="w-28 border rounded px-2 py-1 bg-white" value={draft.area_sqm} onChange={handleDraftChange(row.id, 'area_sqm')} /></td>
                           <td className="p-2">{formatUnit(unitPrice)}</td>
-                          <td className="p-2">{formatDate(row.reins_registered_date)}</td>
-                          <td className="p-2">{formatDate(row.contract_date)}</td>
+                          <td className="p-2"><input type="date" className="w-40 border rounded px-2 py-1 bg-white" value={draft.reins_registered_date} onChange={handleDraftChange(row.id, 'reins_registered_date')} /></td>
+                          <td className="p-2"><input type="date" className="w-40 border rounded px-2 py-1 bg-white" value={draft.contract_date} onChange={handleDraftChange(row.id, 'contract_date')} /></td>
                           <td className="p-2">{elapsedDays == null ? '—' : `${elapsedDays}日`}</td>
-                          <td className="p-2">{statusLabel(row.condition_status)}</td>
+                          <td className="p-2">
+                            <select className="w-56 border rounded px-2 py-1 bg-white" value={draft.condition_status} onChange={handleDraftChange(row.id, 'condition_status')}>
+                              <option value="">選択</option>
+                              {STATUS_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </td>
                           <td className="p-2">
                             {row.mysoku_pdf_path ? (
                               <button
@@ -490,6 +723,22 @@ export default function TabListClient() {
                             )}
                           </td>
                           <td className="p-2">
+                            <button
+                              type="button"
+                              className="underline text-green-700 mr-2 disabled:opacity-50"
+                              onClick={() => { handleSave(row.id).catch(console.error) }}
+                              disabled={!isDirty || savingId === row.id}
+                            >
+                              {savingId === row.id ? '保存中...' : '保存'}
+                            </button>
+                            <button
+                              type="button"
+                              className="underline text-gray-600 mr-2 disabled:opacity-50"
+                              onClick={() => handleResetDraft(row.id)}
+                              disabled={!drafts[row.id] || savingId === row.id}
+                            >
+                              元に戻す
+                            </button>
                             <Link className="underline text-blue-700 mr-2" href={`/tab-regist/${encodeURIComponent(row.id)}/edit`}>
                               編集
                             </Link>
@@ -501,6 +750,7 @@ export default function TabListClient() {
                             >
                               {deletingId === row.id ? '削除中...' : '削除'}
                             </button>
+                            {isDirty && <div className="mt-1 text-[10px] text-amber-700">未保存</div>}
                           </td>
                         </tr>
                       )

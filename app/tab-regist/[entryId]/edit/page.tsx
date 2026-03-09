@@ -7,9 +7,29 @@ import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 
-type ComplexOption = { id: string; name: string; pref: string | null; city: string | null; floorPattern: string | null }
+type DealLabel = '' | 'MAX' | 'MINI'
+type ElevatorChoice = 'あり' | 'なし' | 'スキップ'
+type ConditionStatus =
+  | ''
+  | 'FULL_RENO_INSULATED'
+  | 'FULL_RENO_HIGH_DESIGN'
+  | 'FULL_REFORM_ALL_EQUIP'
+  | 'PARTIAL_REFORM'
+  | 'OWNER_OCCUPIED'
+  | 'NEEDS_RENOVATION'
+  | 'INVESTMENT_PROPERTY'
 
-type YesNo = '' | '有' | '無'
+type ComplexOption = {
+  id: string
+  name: string
+  pref: string | null
+  city: string | null
+  town: string | null
+  stationName: string | null
+  stationAccessType: string | null
+  stationMinutes: number | null
+  unitCount: number | null
+}
 
 type EntryRow = {
   id: string
@@ -17,73 +37,58 @@ type EntryRow = {
   contract_kind: 'MAX' | 'MINI' | null
   floor: number | null
   area_sqm: number | null
-  layout: string | null
+  contract_price: number | null
+  built_month: string | null
+  building_no: number | null
+  condition_status: Exclude<ConditionStatus, ''> | null
+  has_elevator: boolean | null
   reins_registered_date: string | null
   contract_date: string | null
   max_price: number | null
   past_min: number | null
-  interior_level_coef: number | null
-  contract_year_coef: number | null
-  coef_total: number | null
-  renovated: boolean | null
   mysoku_pdf_path: string | null
 }
 
-type MaxForm = {
+type FormState = {
+  elevator: ElevatorChoice
+  builtYm: string
+  buildingNo: string
   floor: string
-  area: string
-  layout: string
-  reins: string
-  contract: string
   price: string
-  interior: string
-  year: string
-  coefTotal: string
+  area: string
+  reinsDate: string
+  contractDate: string
+  status: ConditionStatus
+  label: DealLabel
   pdf: File | null
 }
 
-type MiniForm = {
-  floor: string
-  area: string
-  layout: string
-  reins: string
-  contract: string
-  price: string
-  renovated: YesNo
-  coef: string
-  pdf: File | null
-}
+const STATUS_OPTIONS: { value: Exclude<ConditionStatus, ''>; label: string }[] = [
+  { value: 'FULL_RENO_INSULATED', label: 'フルリノベーション+断熱' },
+  { value: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベーション(デザイン性・快適性良好)' },
+  { value: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム(設備全て交換)' },
+  { value: 'PARTIAL_REFORM', label: '一部リフォーム' },
+  { value: 'OWNER_OCCUPIED', label: '売主居住中' },
+  { value: 'NEEDS_RENOVATION', label: '改修必要' },
+  { value: 'INVESTMENT_PROPERTY', label: '収益物件' },
+]
 
-const initialMax: MaxForm = {
+const westernDateFormatter = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
+const warekiDateFormatter = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', { era: 'short', year: 'numeric', month: '2-digit', day: '2-digit' })
+const warekiMonthFormatter = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', { era: 'short', year: 'numeric', month: 'long' })
+
+const initialForm: FormState = {
+  elevator: 'スキップ',
+  builtYm: '',
+  buildingNo: '',
   floor: '',
-  area: '',
-  layout: '',
-  reins: '',
-  contract: '',
   price: '',
-  interior: '1.0',
-  year: '0.00',
-  coefTotal: '1.00',
-  pdf: null,
-}
-
-const initialMini: MiniForm = {
-  floor: '',
   area: '',
-  layout: '',
-  reins: '',
-  contract: '',
-  price: '',
-  renovated: '',
-  coef: '1.00',
+  reinsDate: '',
+  contractDate: '',
+  status: '',
+  label: '',
   pdf: null,
-}
-
-const floorCoefs: Record<string, number[]> = {
-  '①保守的': [1.0, 0.98, 0.95, 0.9, 0.85],
-  '②中間': [1.0, 0.99, 0.96, 0.92, 0.88],
-  '③攻め': [1.0, 1.0, 0.99, 0.98, 0.97],
-  '④超攻め': [0.98, 0.99, 1.0, 1.03, 1.07],
 }
 
 function toErrorMessage(e: unknown): string {
@@ -92,327 +97,348 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-function safeNum(v: string): number {
-  const n = Number.parseFloat(v)
-  return Number.isFinite(n) ? n : 0
-}
-
-function safeNumValue(v: number | null | undefined): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0
-}
-
 function toInt(v: string): number | null {
-  return v.trim() === '' ? null : Number.parseInt(v, 10)
+  if (!v.trim()) return null
+  const n = Number.parseInt(v, 10)
+  return Number.isFinite(n) ? n : null
 }
 
-function toNum(v: string): number | null {
-  return v.trim() === '' ? null : Number.parseFloat(v)
+function toFloat(v: string): number | null {
+  if (!v.trim()) return null
+  const n = Number.parseFloat(v)
+  return Number.isFinite(n) ? n : null
 }
 
-function toBigInt(v: string): number | null {
-  return v.trim() === '' ? null : Number.parseInt(v, 10)
-}
-
-function fmtYen(n: number): string {
-  return n.toLocaleString('ja-JP') + ' 円'
-}
-
-function toDateValue(v: string | null): string {
+function toDateInput(v: string | null): string {
   if (!v) return ''
   return v.includes('T') ? v.slice(0, 10) : v
 }
 
-function toNumString(v: number | null): string {
-  return typeof v === 'number' && Number.isFinite(v) ? String(v) : ''
+function toMonthInput(v: string | null): string {
+  if (!v) return ''
+  const datePart = v.includes('T') ? v.slice(0, 10) : v
+  return datePart.slice(0, 7)
 }
 
-function toFixedString(v: number | null, fallback: string): string {
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : fallback
+function toDateOrNull(v: string): string | null {
+  return v ? v : null
 }
 
-function diffDays(a: string, b: string): number | null {
-  if (!a || !b) return null
-  const da = new Date(a)
-  const db = new Date(b)
-  if (Number.isNaN(+da) || Number.isNaN(+db)) return null
-  const ms = db.getTime() - da.getTime()
-  return Math.round(ms / 86400000)
+function monthToDateOrNull(v: string): string | null {
+  return v ? `${v}-01` : null
 }
 
-function toInteriorString(v: number | null, fallback: string): string {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
-  const fixed = v.toFixed(2)
-  return fixed.endsWith('0') ? fixed.slice(0, -1) : fixed
+function calcUnitPrice(price: string, area: string): number | null {
+  const p = toFloat(price)
+  const a = toFloat(area)
+  if (p == null || a == null || a <= 0) return null
+  return Math.round((p / a) * 100) / 100
 }
 
-export default function TabRegistPage() {
+function calcElapsedDays(reinsDate: string, contractDate: string): number | null {
+  if (!reinsDate || !contractDate) return null
+  const reins = new Date(`${reinsDate}T00:00:00`)
+  const contract = new Date(`${contractDate}T00:00:00`)
+  if (Number.isNaN(reins.getTime()) || Number.isNaN(contract.getTime())) return null
+  return Math.round((contract.getTime() - reins.getTime()) / 86400000)
+}
+
+function formatDateWithEra(v: string): string {
+  if (!v) return '—'
+  const d = new Date(`${v}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${westernDateFormatter.format(d)} (${warekiDateFormatter.format(d)})`
+}
+
+function formatMonthWithEra(v: string): string {
+  if (!v) return '—'
+  const d = new Date(`${v}-01T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  const [y, m] = v.split('-')
+  return `${y}年${m}月 (${warekiMonthFormatter.format(d)})`
+}
+
+function elevatorToDb(v: ElevatorChoice): boolean | null {
+  if (v === 'あり') return true
+  if (v === 'なし') return false
+  return null
+}
+
+function priceFromRow(row: EntryRow): number | null {
+  if (typeof row.contract_price === 'number' && Number.isFinite(row.contract_price)) return row.contract_price
+  if (typeof row.max_price === 'number' && Number.isFinite(row.max_price)) return row.max_price
+  if (typeof row.past_min === 'number' && Number.isFinite(row.past_min)) return row.past_min
+  return null
+}
+
+function buildLabelSpecificResetPayload(previousKind: EntryRow['contract_kind'], nextKind: DealLabel) {
+  if (previousKind === nextKind) return {}
+  if (nextKind === 'MAX') {
+    return {
+      renovated: null,
+    }
+  }
+  if (nextKind === 'MINI') {
+    return {
+      coef_total: null,
+      interior_level_coef: null,
+      contract_year_coef: null,
+    }
+  }
+  return {
+    coef_total: null,
+    interior_level_coef: null,
+    contract_year_coef: null,
+    renovated: null,
+  }
+}
+
+export default function EntryEditPage() {
   const supabase = getSupabase()
   const router = useRouter()
   const params = useParams<{ entryId: string }>()
   const entryId = params?.entryId as string | undefined
 
   const [complexes, setComplexes] = useState<ComplexOption[]>([])
-  const [selectedComplexId, setSelectedComplexId] = useState<string>('')
-  const [loadingComplex, setLoadingComplex] = useState(false)
-  const [entryKind, setEntryKind] = useState<'MAX' | 'MINI' | null>(null)
+  const [selectedComplexId, setSelectedComplexId] = useState('')
+  const [originalContractKind, setOriginalContractKind] = useState<EntryRow['contract_kind']>(null)
+  const [form, setForm] = useState<FormState>(initialForm)
+
+  const [loadingComplexes, setLoadingComplexes] = useState(false)
   const [loadingEntry, setLoadingEntry] = useState(true)
-  const [signedUrl, setSignedUrl] = useState<string | null>(null)
-  const [existingPdfPath, setExistingPdfPath] = useState<string | null>(null)
-
-  const [maxForm, setMaxForm] = useState<MaxForm>(initialMax)
-  const [miniForm, setMiniForm] = useState<MiniForm>(initialMini)
-  const [savingMax, setSavingMax] = useState(false)
-  const [savingMini, setSavingMini] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [existingPdfPath, setExistingPdfPath] = useState<string | null>(null)
+  const [existingPdfSignedUrl, setExistingPdfSignedUrl] = useState<string | null>(null)
 
-  const selectedComplex = useMemo(() => complexes.find((c) => c.id === selectedComplexId) ?? null, [complexes, selectedComplexId])
+  const selectedComplex = useMemo(
+    () => complexes.find((complex) => complex.id === selectedComplexId) ?? null,
+    [complexes, selectedComplexId],
+  )
+
+  const unitPrice = useMemo(() => calcUnitPrice(form.price, form.area), [form.price, form.area])
+  const elapsedDays = useMemo(() => calcElapsedDays(form.reinsDate, form.contractDate), [form.reinsDate, form.contractDate])
 
   useEffect(() => {
     let mounted = true
-    async function run() {
+    async function loadComplexes() {
+      setLoadingComplexes(true)
+      try {
+        const { data, error } = await supabase
+          .from('housing_complexes')
+          .select('id, name, pref, city, town, station_name, station_access_type, station_minutes, unit_count')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        const list = (data ?? []).map((row) => ({
+          id: row.id as string,
+          name: (row.name as string | null) ?? '(名称未設定)',
+          pref: (row.pref as string | null) ?? null,
+          city: (row.city as string | null) ?? null,
+          town: (row.town as string | null) ?? null,
+          stationName: (row.station_name as string | null) ?? null,
+          stationAccessType: (row.station_access_type as string | null) ?? null,
+          stationMinutes: (row.station_minutes as number | null) ?? null,
+          unitCount: (row.unit_count as number | null) ?? null,
+        }))
+        if (mounted) setComplexes(list)
+      } catch (e) {
+        console.error(e)
+        if (mounted) setMsg('団地一覧の取得に失敗しました: ' + toErrorMessage(e))
+      } finally {
+        if (mounted) setLoadingComplexes(false)
+      }
+    }
+    loadComplexes()
+    return () => { mounted = false }
+  }, [supabase])
+
+  useEffect(() => {
+    let mounted = true
+    async function loadEntry() {
       if (!entryId) {
-        if (mounted) {
-          setMsg('成約データが見つかりませんでした')
-          setLoadingEntry(false)
-        }
+        setLoadingEntry(false)
+        setMsg('成約データが見つかりません')
         return
       }
       setLoadingEntry(true)
       try {
         const { data, error } = await supabase
           .from('estate_entries')
-          .select('id, complex_id, contract_kind, floor, area_sqm, layout, reins_registered_date, contract_date, max_price, past_min, interior_level_coef, contract_year_coef, coef_total, renovated, mysoku_pdf_path')
+          .select('id, complex_id, contract_kind, floor, area_sqm, contract_price, built_month, building_no, condition_status, has_elevator, reins_registered_date, contract_date, max_price, past_min, mysoku_pdf_path')
           .eq('id', entryId)
           .maybeSingle()
         if (error) throw error
         const row = (data ?? null) as EntryRow | null
         if (!row) {
-          if (mounted) {
-            setEntryKind(null)
-            setMsg('成約データが見つかりませんでした')
-          }
+          if (mounted) setMsg('成約データが見つかりません')
           return
         }
-        const kind = row.contract_kind === 'MAX' || row.contract_kind === 'MINI' ? row.contract_kind : null
+
         if (mounted) {
-          setEntryKind(kind)
-          if (row.complex_id) setSelectedComplexId(row.complex_id)
-          if (kind === 'MAX') {
-            const hasCoefParts = typeof row.interior_level_coef === 'number' || typeof row.contract_year_coef === 'number'
-            const derivedCoef = hasCoefParts ? safeNumValue(row.interior_level_coef) + safeNumValue(row.contract_year_coef) : null
-            const coefTotal = typeof row.coef_total === 'number'
-              ? row.coef_total.toFixed(2)
-              : (derivedCoef !== null ? derivedCoef.toFixed(2) : initialMax.coefTotal)
-            setMaxForm({
-              ...initialMax,
-              floor: toNumString(row.floor),
-              area: toNumString(row.area_sqm),
-              layout: row.layout ?? '',
-              reins: toDateValue(row.reins_registered_date),
-              contract: toDateValue(row.contract_date),
-              price: toNumString(row.max_price),
-              interior: toInteriorString(row.interior_level_coef, initialMax.interior),
-              year: toFixedString(row.contract_year_coef, initialMax.year),
-              coefTotal,
-              pdf: null,
-            })
-          } else if (kind === 'MINI') {
-            const coefBase = typeof row.coef_total === 'number'
-              ? row.coef_total
-              : (typeof row.interior_level_coef === 'number' ? row.interior_level_coef : null)
-            setMiniForm({
-              ...initialMini,
-              floor: toNumString(row.floor),
-              area: toNumString(row.area_sqm),
-              layout: row.layout ?? '',
-              reins: toDateValue(row.reins_registered_date),
-              contract: toDateValue(row.contract_date),
-              price: toNumString(row.past_min),
-              renovated: row.renovated === true ? '有' : row.renovated === false ? '無' : '',
-              coef: toFixedString(coefBase, initialMini.coef),
-              pdf: null,
-            })
-          }
+          setSelectedComplexId(row.complex_id ?? '')
+          setOriginalContractKind(row.contract_kind ?? null)
           setExistingPdfPath(row.mysoku_pdf_path ?? null)
-          setSignedUrl(null)
-          if (row.mysoku_pdf_path) {
-            try {
-              const { data: signed } = await supabase
-                .storage
-                .from('uploads')
-                .createSignedUrl(row.mysoku_pdf_path, 600)
-              if (mounted) setSignedUrl(signed?.signedUrl ?? null)
-            } catch {
-              if (mounted) setSignedUrl(null)
-            }
+          setForm({
+            elevator: row.has_elevator === true ? 'あり' : row.has_elevator === false ? 'なし' : 'スキップ',
+            builtYm: toMonthInput(row.built_month),
+            buildingNo: typeof row.building_no === 'number' ? String(row.building_no) : '',
+            floor: typeof row.floor === 'number' ? String(row.floor) : '',
+            price: (() => {
+              const p = priceFromRow(row)
+              return typeof p === 'number' ? String(p) : ''
+            })(),
+            area: typeof row.area_sqm === 'number' ? String(row.area_sqm) : '',
+            reinsDate: toDateInput(row.reins_registered_date),
+            contractDate: toDateInput(row.contract_date),
+            status: (row.condition_status ?? '') as ConditionStatus,
+            label: row.contract_kind ?? '',
+            pdf: null,
+          })
+        }
+
+        if (row.mysoku_pdf_path) {
+          try {
+            const { data: signedData } = await supabase.storage.from('uploads').createSignedUrl(row.mysoku_pdf_path, 600)
+            if (mounted) setExistingPdfSignedUrl(signedData?.signedUrl ?? null)
+          } catch {
+            if (mounted) setExistingPdfSignedUrl(null)
           }
         }
       } catch (e) {
-        console.error('[entry/load]', e)
+        console.error('[entry:load]', e)
         if (mounted) setMsg('成約データの取得に失敗しました: ' + toErrorMessage(e))
       } finally {
         if (mounted) setLoadingEntry(false)
       }
     }
-    run()
+    loadEntry()
     return () => { mounted = false }
   }, [supabase, entryId])
 
-  useEffect(() => {
-    let mounted = true
-    async function run() {
-      setLoadingComplex(true)
-      try {
-        const { data, error } = await supabase
-          .from('housing_complexes')
-          .select('id, name, pref, city, floor_coef_pattern')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        const opts = (data ?? []).map((r) => ({
-          id: r.id as string,
-          name: (r.name as string) ?? '(名称未設定)',
-          pref: (r.pref as string | null) ?? null,
-          city: (r.city as string | null) ?? null,
-          floorPattern: (r.floor_coef_pattern as string | null) ?? null,
-        }))
-        if (mounted) {
-          setComplexes(opts)
-          if (!entryId && !selectedComplexId && opts[0]) setSelectedComplexId(opts[0].id)
-        }
-      } catch (e) {
-        console.error(e)
-        if (mounted) setMsg('団地一覧の取得に失敗しました: ' + toErrorMessage(e))
-      } finally {
-        if (mounted) setLoadingComplex(false)
+  function onChange<K extends Exclude<keyof FormState, 'pdf'>>(key: K) {
+    return (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const value = e.target.value
+      if (key === 'label') {
+        const label = value as DealLabel
+        setForm((prev) => ({ ...prev, label, pdf: label ? prev.pdf : null }))
+        return
       }
+      if (key === 'status') {
+        setForm((prev) => ({ ...prev, status: value as ConditionStatus }))
+        return
+      }
+      if (key === 'elevator') {
+        setForm((prev) => ({ ...prev, elevator: value as ElevatorChoice }))
+        return
+      }
+      setForm((prev) => ({ ...prev, [key]: value }))
     }
-    run()
-    return () => { mounted = false }
-  }, [supabase, entryId, selectedComplexId])
-
-  // coefTotal = interior + year を自動同期
-  useEffect(() => {
-    const newCoef = (safeNum(maxForm.interior) + safeNum(maxForm.year)).toFixed(2)
-    if (newCoef !== maxForm.coefTotal) {
-      setMaxForm((prev) => ({ ...prev, coefTotal: newCoef }))
-    }
-  }, [maxForm.interior, maxForm.year, maxForm.coefTotal])
-
-  const maxUnit = useMemo(() => {
-    const p = safeNum(maxForm.price)
-    const a = safeNum(maxForm.area)
-    return a > 0 ? Math.round(p / a) : 0
-  }, [maxForm.price, maxForm.area])
-
-  const maxDays = useMemo(() => diffDays(maxForm.reins, maxForm.contract), [maxForm.reins, maxForm.contract])
-
-  const maxFloorCoef = useMemo(() => {
-    const pattern = selectedComplex?.floorPattern ?? ''
-    const list = floorCoefs[pattern]
-    if (!list || list.length === 0) return 1
-    const floor = Number.parseInt(maxForm.floor, 10)
-    if (Number.isFinite(floor)) {
-      const coef = list[floor - 1]
-      if (typeof coef === 'number') return coef
-    }
-    return list[0]
-  }, [selectedComplex?.floorPattern, maxForm.floor])
-
-  const maxTarget = useMemo(() => Math.round(maxUnit * safeNum(maxForm.coefTotal) * maxFloorCoef), [maxUnit, maxForm.coefTotal, maxFloorCoef])
-
-  const miniUnit = useMemo(() => {
-    const p = safeNum(miniForm.price)
-    const a = safeNum(miniForm.area)
-    return a > 0 ? Math.round(p / a) : 0
-  }, [miniForm.price, miniForm.area])
-
-  const miniDays = useMemo(() => diffDays(miniForm.reins, miniForm.contract), [miniForm.reins, miniForm.contract])
-
-  const onMaxChange = <K extends keyof MaxForm>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const val = e.target.value
-    setMaxForm((prev) => ({ ...prev, [key]: val }))
-  }
-  const onMiniChange = <K extends keyof MiniForm>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const val = e.target.value
-    setMiniForm((prev) => ({ ...prev, [key]: val }))
   }
 
-  async function uploadPdf(file: File | null, userId: string): Promise<string | null> {
-    if (!file) return null
-    const sanitizedName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
-    const path = `${userId}/mysoku/${Date.now()}-${sanitizedName}`
-    const { error } = await supabase.storage.from('uploads').upload(path, file, { upsert: false, contentType: 'application/pdf' })
+  async function uploadPdf(file: File, userId: string, label: DealLabel): Promise<string> {
+    const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const path = `${userId}/mysoku/${Date.now()}-${label || 'NONE'}-${safeName}`
+    const { error } = await supabase.storage.from('uploads').upload(path, file, {
+      upsert: false,
+      contentType: 'application/pdf',
+    })
     if (error) throw new Error('PDFアップロード失敗: ' + error.message)
     return path
   }
 
-  async function handleSubmit(kind: 'MAX' | 'MINI', ev: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault()
+    if (!entryId) return
+    if (!selectedComplex) {
+      setMsg('団地を選択してください')
+      return
+    }
+    if (form.pdf && !form.label) {
+      setMsg('PDF添付はMAX/MINIラベルが付いた場合のみ可能です')
+      return
+    }
+
+    setSaving(true)
     setMsg('')
-    if (!entryId) { setMsg('成約データが見つかりません'); return }
-    if (!selectedComplex) { setMsg('団地を選択してください'); return }
-    if (entryKind && kind !== entryKind) { setMsg('成約種別が一致しません'); return }
-    const { data: { user }, error: uerr } = await supabase.auth.getUser()
-    if (uerr) { setMsg('認証エラー: ' + uerr.message); return }
-    if (!user) { setMsg('ログインが必要です'); return }
-
     try {
-      if (kind === 'MAX') setSavingMax(true); else setSavingMini(true)
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
+      if (!user) throw new Error('ログインが必要です')
 
-      const pdfPath = await uploadPdf(kind === 'MAX' ? maxForm.pdf : miniForm.pdf, user.id)
-
-      if (kind === 'MAX') {
-        const payload: Record<string, unknown> = {
-          estate_name: selectedComplex.name,
-          complex_id: selectedComplex.id,
-          floor: toInt(maxForm.floor),
-          area_sqm: toNum(maxForm.area),
-          layout: maxForm.layout.trim() || null,
-          reins_registered_date: maxForm.reins || null,
-          contract_date: maxForm.contract || null,
-          max_price: toBigInt(maxForm.price),
-          past_min: null,
-          interior_level_coef: toNum(maxForm.interior),
-          contract_year_coef: toNum(maxForm.year),
-          coef_total: toNum(maxForm.coefTotal),
-          contract_kind: 'MAX',
-          renovated: null,
+      if (form.label) {
+        const { data: conflictRows, error: conflictError } = await supabase
+          .from('estate_entries')
+          .select('id')
+          .eq('complex_id', selectedComplexId)
+          .eq('contract_kind', form.label)
+          .neq('id', entryId)
+          .is('deleted_at', null)
+          .limit(1)
+        if (conflictError) throw conflictError
+        if ((conflictRows ?? []).length > 0) {
+          setMsg(`${form.label}ラベルは同じ団地内で1件のみ指定できます`)
+          setSaving(false)
+          return
         }
-        if (pdfPath) payload.mysoku_pdf_path = pdfPath
-        const { error } = await supabase.from('estate_entries').update(payload).eq('id', entryId)
-        if (error) throw new Error(error.message)
-        setMsg('MAXを更新しました')
-      } else {
-        const payload: Record<string, unknown> = {
-          estate_name: selectedComplex.name,
-          complex_id: selectedComplex.id,
-          floor: toInt(miniForm.floor),
-          area_sqm: toNum(miniForm.area),
-          layout: miniForm.layout.trim() || null,
-          reins_registered_date: miniForm.reins || null,
-          contract_date: miniForm.contract || null,
-          max_price: null,
-          past_min: toBigInt(miniForm.price),
-          interior_level_coef: toNum(miniForm.coef),
-          contract_year_coef: null,
-          coef_total: toNum(miniForm.coef),
-          contract_kind: 'MINI',
-          renovated: miniForm.renovated === '有' ? true : miniForm.renovated === '無' ? false : null,
-        }
-        if (pdfPath) payload.mysoku_pdf_path = pdfPath
-        const { error } = await supabase.from('estate_entries').update(payload).eq('id', entryId)
-        if (error) throw new Error(error.message)
-        setMsg('MINIを更新しました')
       }
+
+      let pdfPath = form.label ? existingPdfPath : null
+      if (form.pdf) {
+        pdfPath = await uploadPdf(form.pdf, user.id, form.label)
+      }
+
+      const price = toInt(form.price)
+      const kind = form.label || null
+      const payload = {
+        estate_name: selectedComplex.name,
+        complex_id: selectedComplex.id,
+        has_elevator: elevatorToDb(form.elevator),
+        built_month: monthToDateOrNull(form.builtYm),
+        building_no: toInt(form.buildingNo),
+        floor: toInt(form.floor),
+        contract_price: price,
+        max_price: kind === 'MAX' ? price : null,
+        past_min: kind === 'MINI' ? price : null,
+        area_sqm: toFloat(form.area),
+        unit_price: calcUnitPrice(form.price, form.area),
+        reins_registered_date: toDateOrNull(form.reinsDate),
+        contract_date: toDateOrNull(form.contractDate),
+        condition_status: form.status || null,
+        contract_kind: kind,
+        mysoku_pdf_path: pdfPath,
+        ...buildLabelSpecificResetPayload(originalContractKind, form.label),
+      }
+
+      const { error } = await supabase
+        .from('estate_entries')
+        .update(payload)
+        .eq('id', entryId)
+      if (error) throw error
+
+      setExistingPdfPath(pdfPath)
+      setExistingPdfSignedUrl(null)
+      setOriginalContractKind(kind)
+      setMsg('更新しました')
       router.push(`/tab-list?complexId=${encodeURIComponent(selectedComplex.id)}`)
     } catch (e) {
-      console.error('[entry/update]', e)
+      console.error('[entry:update]', e)
       setMsg('更新に失敗しました: ' + toErrorMessage(e))
     } finally {
-      setSavingMax(false); setSavingMini(false)
+      setSaving(false)
     }
   }
+
+  const complexLocation = useMemo(() => {
+    if (!selectedComplex) return '—'
+    return [selectedComplex.pref ?? '', selectedComplex.city ?? '', selectedComplex.town ?? ''].filter(Boolean).join(' ') || '—'
+  }, [selectedComplex])
+
+  const complexStation = useMemo(() => selectedComplex?.stationName ?? '—', [selectedComplex])
+  const complexStationWalk = useMemo(() => {
+    if (!selectedComplex || selectedComplex.stationMinutes == null) return '—'
+    return `${selectedComplex.stationAccessType ?? '徒歩'}${selectedComplex.stationMinutes}分`
+  }, [selectedComplex])
 
   return (
     <RequireAuth>
@@ -421,7 +447,7 @@ export default function TabRegistPage() {
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-xl bg-gray-900 text-white grid place-items-center font-bold">DX</div>
-              <h1 className="text-lg font-semibold">過去成約（MAX / MINI）編集</h1>
+              <h1 className="text-lg font-semibold">過去成約編集（1成約1行）</h1>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <UserEmail />
@@ -431,190 +457,143 @@ export default function TabRegistPage() {
             </div>
           </div>
           <nav className="max-w-7xl mx-auto px-4 pb-2 pt-1">
-            <ul className="flex flex-wrap items-center gap-2 text-sm">
+            <ul className="flex flex-wrap gap-2 text-sm">
               <li><Link href="/tab-complex-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">団地一覧</Link></li>
               <li><Link href="/tab-complex" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">団地基本情報</Link></li>
-              <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">過去成約編集</span></li>
-              <li><Link href="/tab-stock-reg" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">在庫登録</Link></li>
+              <li><Link href="/tab-regist" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">過去成約登録</Link></li>
+              <li><Link href="/tab-list" className="tabbtn px-3 py-1.5 rounded-lg bg-gray-200">過去成約一覧</Link></li>
+              <li><span className="tabbtn px-3 py-1.5 rounded-lg bg-black text-white">編集</span></li>
             </ul>
           </nav>
         </header>
 
         <main className="max-w-7xl mx-auto p-4 space-y-6">
-          <section id="tab-regist" className="tab active">
-            <div className="bg-white rounded-2xl shadow p-5 space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={selectedComplexId ? `/tab-list?complexId=${encodeURIComponent(selectedComplexId)}` : '/tab-list'}
-                    className="px-2 py-1.5 rounded-lg bg-gray-100 text-sm"
-                  >
-                    ← 戻る
-                  </Link>
-                  <h2 className="text-lg font-semibold">団地に紐づく過去成約編集（MAX / MINI）</h2>
-                </div>
-                <span className="text-sm text-gray-500">{msg || '内容を更新してください'}</span>
-              </div>
+          <section className="bg-white rounded-2xl shadow p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">過去成約編集</h2>
+              <Link href={selectedComplexId ? `/tab-list?complexId=${encodeURIComponent(selectedComplexId)}` : '/tab-list'} className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm">
+                一覧へ戻る
+              </Link>
+            </div>
 
-              {loadingEntry ? (
-                <p className="text-sm text-gray-500">読み込み中...</p>
-              ) : !entryKind ? (
-                <p className="text-sm text-red-600">成約データが見つかりませんでした</p>
-              ) : (
-                <>
-                  <div className="grid md:grid-cols-2 gap-4 text-sm">
-                    <label className="block">団地を選択
-                      <select
-                        className="mt-1 w-full border rounded-lg px-3 py-2"
-                        value={selectedComplexId}
-                        onChange={(e) => setSelectedComplexId(e.target.value)}
-                        disabled={loadingComplex}
-                      >
-                        {complexes.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name} {c.pref ?? ''}{c.city ? ` ${c.city}` : ''}</option>
-                        ))}
-                        {complexes.length === 0 && <option value="">団地なし（先に登録してください）</option>}
-                      </select>
-                    </label>
-                    <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
-                      <div className="text-xs text-gray-600">階数効用パターン</div>
-                      <div className="font-semibold text-sm">{selectedComplex?.floorPattern || '未設定'}</div>
-                      <div className="text-xs text-gray-500 mt-1">※ 団地基本情報で設定したパターンを参考に計算</div>
+            {msg && (
+              <p className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
+                {msg}
+              </p>
+            )}
+
+            {loadingEntry ? (
+              <p className="text-sm text-gray-500">読み込み中...</p>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <label className="block">対象団地
+                    <select
+                      className="mt-1 w-full border rounded-lg px-3 py-2"
+                      value={selectedComplexId}
+                      onChange={(e) => setSelectedComplexId(e.target.value)}
+                      disabled={loadingComplexes}
+                    >
+                      {complexes.map((complex) => (
+                        <option key={complex.id} value={complex.id}>
+                          {complex.name} {complex.pref ?? ''}{complex.city ? ` ${complex.city}` : ''}
+                        </option>
+                      ))}
+                      {complexes.length === 0 && <option value="">団地なし</option>}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid md:grid-cols-5 gap-3 text-sm">
+                  <div className="rounded-lg border p-3 bg-gray-50"><div className="text-gray-500 text-xs">1 団地名</div><div className="font-semibold">{selectedComplex?.name ?? '—'}</div></div>
+                  <div className="rounded-lg border p-3 bg-gray-50"><div className="text-gray-500 text-xs">2 所在地</div><div>{complexLocation}</div></div>
+                  <div className="rounded-lg border p-3 bg-gray-50"><div className="text-gray-500 text-xs">3 最寄り駅</div><div>{complexStation}</div></div>
+                  <div className="rounded-lg border p-3 bg-gray-50"><div className="text-gray-500 text-xs">4 徒歩時間</div><div>{complexStationWalk}</div></div>
+                  <div className="rounded-lg border p-3 bg-gray-50"><div className="text-gray-500 text-xs">5 総戸数</div><div>{selectedComplex?.unitCount != null ? `${selectedComplex.unitCount}戸` : '—'}</div></div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <label className="block">ラベル
+                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.label} onChange={onChange('label')}>
+                      <option value="">なし</option>
+                      <option value="MAX">MAX</option>
+                      <option value="MINI">MINI</option>
+                    </select>
+                  </label>
+                  <label className="block">6 エレベーター
+                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.elevator} onChange={onChange('elevator')}>
+                      <option value="あり">あり</option>
+                      <option value="なし">なし</option>
+                      <option value="スキップ">スキップ</option>
+                    </select>
+                  </label>
+                  <label className="block">7 築年月
+                    <input type="month" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.builtYm} onChange={onChange('builtYm')} />
+                    <p className="text-[11px] text-gray-500 mt-1">{formatMonthWithEra(form.builtYm)}</p>
+                  </label>
+                  <label className="block">8 棟番号
+                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2" value={form.buildingNo} onChange={onChange('buildingNo')} />
+                  </label>
+                  <label className="block">9 階数
+                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2" value={form.floor} onChange={onChange('floor')} />
+                  </label>
+                  <label className="block">10 成約価格
+                    <input type="number" min={0} step={1} className="mt-1 w-full border rounded-lg px-3 py-2" value={form.price} onChange={onChange('price')} />
+                  </label>
+                  <label className="block">11 ㎡数
+                    <input type="number" min={0} step={0.01} className="mt-1 w-full border rounded-lg px-3 py-2" value={form.area} onChange={onChange('area')} />
+                  </label>
+                  <div className="block">12 ㎡単価
+                    <div className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600">
+                      {unitPrice == null ? '—' : `${unitPrice.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円/㎡`}
                     </div>
                   </div>
-
-                  <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm">
-                    <div className="font-semibold mb-1">計算メモ</div>
-                    <p className="text-gray-700">
-                      目標成約単価 ＝ 成約㎡単価 × (内装係数 + 年数係数) × 階数効用比率。買付目標額は目標成約価格からリノベ予算・アップフロント・その他を控除して算出（既存ロジック流用予定）。
-                    </p>
+                  <label className="block">13 レインズ登録年月日
+                    <input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.reinsDate} onChange={onChange('reinsDate')} />
+                    <p className="text-[11px] text-gray-500 mt-1">{formatDateWithEra(form.reinsDate)}</p>
+                  </label>
+                  <label className="block">14 レインズ成約年月日
+                    <input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={form.contractDate} onChange={onChange('contractDate')} />
+                    <p className="text-[11px] text-gray-500 mt-1">{formatDateWithEra(form.contractDate)}</p>
+                  </label>
+                  <div className="block">15 経過日数
+                    <div className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600">{elapsedDays == null ? '—' : `${elapsedDays}日`}</div>
                   </div>
+                  <label className="block md:col-span-2">16 状態
+                    <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.status} onChange={onChange('status')}>
+                      <option value="">選択</option>
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="md:col-span-3 space-y-2">
+                    <div className="text-sm font-medium">PDF（MAX/MINIのみ）</div>
+                    {existingPdfPath && (
+                      <div className="text-xs text-gray-600">
+                        登録済みPDFあり
+                        {existingPdfSignedUrl && (
+                          <a className="ml-2 underline text-blue-700" href={existingPdfSignedUrl} target="_blank" rel="noopener noreferrer">確認</a>
+                        )}
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      disabled={!form.label}
+                      className="w-full border rounded-lg px-3 py-2 bg-white disabled:bg-gray-100 disabled:text-gray-400"
+                      onChange={(e) => setForm((prev) => ({ ...prev, pdf: e.target.files?.[0] ?? null }))}
+                    />
+                  </div>
+                </div>
 
-                  {entryKind === 'MAX' ? (
-                    <form className="space-y-6" onSubmit={(ev) => { handleSubmit('MAX', ev).catch(console.error) }}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">MAX</span>
-                          <h3 className="font-semibold">過去MAX編集（㎡単価/目標単価を知る）</h3>
-                        </div>
-                        <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg text-sm disabled:opacity-60" disabled={savingMax || !selectedComplex}>
-                          {savingMax ? '更新中...' : '更新'}
-                        </button>
-                      </div>
-                      <div className="grid md:grid-cols-3 gap-4 text-sm">
-                        <label className="block">階数<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="5" value={maxForm.floor} onChange={onMaxChange('floor')} /></label>
-                        <label className="block">面積（㎡）<input type="number" min="0" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="68.32" value={maxForm.area} onChange={onMaxChange('area')} /></label>
-                        <label className="block">間取り<input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="3LDK" value={maxForm.layout} onChange={onMaxChange('layout')} /></label>
-                        <label className="block">登録年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.reins} onChange={onMaxChange('reins')} /></label>
-                        <label className="block">成約年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.contract} onChange={onMaxChange('contract')} /></label>
-                        <label className="block">成約までの経過日数(成約年月日-登録年月日)
-                          <input type="text" readOnly className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600" value={maxDays === null ? '' : `${maxDays} 日`} />
-                        </label>
-                        <label className="block">過去成約価格（MAX）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="19800000" value={maxForm.price} onChange={onMaxChange('price')} /></label>
-                        <label className="block">内装レベル係数
-                          <select className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.interior} onChange={onMaxChange('interior')}>
-                            <option value="">選択</option>
-                            <option value="1.0">デザイン性+断熱 1.0</option>
-                            <option value="1.05">フルリノベーション 1.05</option>
-                            <option value="1.1">全面リフォーム 1.1</option>
-                            <option value="1.15">部分リフォーム(設備一部更新+表層) 1.15</option>
-                            <option value="1.2">クロス・壁面・床のみ 1.2</option>
-                            <option value="1.25">原状渡し(要リフォーム) 1.25</option>
-                            <option value="1.3">悪条件(土足可レベル) 1.3</option>
-                          </select>
-                        </label>
-                        <label className="block">成約年月日 上乗せ係数
-                          <select className="mt-1 w-full border rounded-lg px-3 py-2" value={maxForm.year} onChange={onMaxChange('year')}>
-                            <option value="">選択</option>
-                            <option value="0.00">1年未満(0.00)</option>
-                            <option value="0.02">1~2年前(0.02)</option>
-                            <option value="0.04">2~3年前(0.04)</option>
-                            <option value="0.06">3~5年前(0.06)</option>
-                            <option value="0.08">5年以上前(0.08)</option>
-                            <option value="0.10">10年以上前(0.10)</option>
-                          </select>
-                        </label>
-                        <label className="block md:col-span-3">マイソク添付
-                          <input type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" onChange={(e) => setMaxForm((prev) => ({ ...prev, pdf: e.target.files?.[0] ?? null }))} />
-                          {existingPdfPath ? (
-                            <p className="mt-1 text-xs text-gray-500">
-                              既存PDF: {signedUrl ? (
-                                <a className="underline text-blue-700" href={signedUrl} target="_blank" rel="noreferrer">ダウンロード</a>
-                              ) : '取得中...'}
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-gray-400">既存PDFなし</p>
-                          )}
-                        </label>
-                      </div>
-                      <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm grid md:grid-cols-3 gap-4">
-                        <div>
-                          <div className="text-gray-500">成約㎡単価</div>
-                          <div className="text-2xl font-semibold"><span className="num">{maxUnit ? fmtYen(maxUnit) + '/㎡' : '—'}</span></div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">係数計（内装 + 年数）</div>
-                          <input type="number" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2 num" value={maxForm.coefTotal} onChange={onMaxChange('coefTotal')} />
-                        </div>
-                        <div>
-                          <div className="text-gray-500">成約目標単価（階効用込み）</div>
-                          <div className="text-2xl font-semibold"><span className="num">{maxTarget ? fmtYen(maxTarget) + '/㎡' : '—'}</span></div>
-                          <p className="text-xs text-gray-500 mt-1">※団地基本情報の階数効用比率を適用</p>
-                        </div>
-                      </div>
-                    </form>
-                  ) : null}
-
-                  {entryKind === 'MINI' ? (
-                    <form className="space-y-6" onSubmit={(ev) => { handleSubmit('MINI', ev).catch(console.error) }}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">MINI</span>
-                          <h3 className="font-semibold">過去MINI編集（最低成約価格を記録）</h3>
-                        </div>
-                        <button type="submit" className="px-3 py-1.5 bg-black text-white rounded-lg text-sm disabled:opacity-60" disabled={savingMini || !selectedComplex}>
-                          {savingMini ? '更新中...' : '更新'}
-                        </button>
-                      </div>
-                      <div className="grid md:grid-cols-3 gap-4 text-sm">
-                        <label className="block">階数<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="3" value={miniForm.floor} onChange={onMiniChange('floor')} /></label>
-                        <label className="block">面積（㎡）<input type="number" min="0" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="55.20" value={miniForm.area} onChange={onMiniChange('area')} /></label>
-                        <label className="block">間取り<input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="2LDK" value={miniForm.layout} onChange={onMiniChange('layout')} /></label>
-                        <label className="block">登録年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.reins} onChange={onMiniChange('reins')} /></label>
-                        <label className="block">成約年月日<input type="date" className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.contract} onChange={onMiniChange('contract')} /></label>
-                        <label className="block">成約までの経過日数(成約年月日-登録年月日)
-                          <input type="text" readOnly className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600" value={miniDays === null ? '' : `${miniDays} 日`} />
-                        </label>
-                        <label className="block">成約価格（MINI）<input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="7500000" value={miniForm.price} onChange={onMiniChange('price')} /></label>
-                        <label className="block">リノベ有無
-                          <select className="mt-1 w-full border rounded-lg px-3 py-2" value={miniForm.renovated} onChange={onMiniChange('renovated')}>
-                            <option value="">選択</option><option value="有">有</option><option value="無">無</option>
-                          </select>
-                        </label>
-                        <label className="block md:col-span-2">マイソク添付
-                          <input type="file" accept="application/pdf" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" onChange={(e) => setMiniForm((prev) => ({ ...prev, pdf: e.target.files?.[0] ?? null }))} />
-                          {existingPdfPath ? (
-                            <p className="mt-1 text-xs text-gray-500">
-                              既存PDF: {signedUrl ? (
-                                <a className="underline text-blue-700" href={signedUrl} target="_blank" rel="noreferrer">ダウンロード</a>
-                              ) : '取得中...'}
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-gray-400">既存PDFなし</p>
-                          )}
-                        </label>
-                      </div>
-                      <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm grid md:grid-cols-1 gap-4">
-                        <div>
-                          <div className="text-gray-500">成約㎡単価</div>
-                          <div className="text-2xl font-semibold"><span className="num">{miniUnit ? fmtYen(miniUnit) + '/㎡' : '—'}</span></div>
-                        </div>
-                      </div>
-                    </form>
-                  ) : null}
-                </>
-              )}
-            </div>
+                <div className="flex justify-end">
+                  <button type="submit" className="px-4 py-2 bg-black text-white rounded-lg text-sm disabled:opacity-60" disabled={saving || !selectedComplex}>
+                    {saving ? '更新中...' : '更新'}
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
         </main>
       </div>
