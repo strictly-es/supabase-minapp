@@ -137,7 +137,7 @@ const evalOptions: Record<keyof Omit<EvalState, 'comment'>, EvalOption[]> = {
 }
 
 const initialEval: EvalState = {
-  marketDeals: 'rich',
+  marketDeals: 'pending_auto',
   rentDemand: 'high',
   inventory: '5',
   walk: '5',
@@ -196,6 +196,7 @@ function calcBuiltAge(builtYm: string): number | null {
 }
 
 function getScore(key: keyof Omit<EvalState, 'comment'>, state: EvalState): number {
+  if (key === 'marketDeals' && state[key] === 'pending_auto') return 0
   const opt = evalOptions[key].find((o) => o.value === state[key])
   return opt?.score ?? 0
 }
@@ -490,8 +491,8 @@ export default function TabComplexPage() {
                       <span className="text-xs text-gray-500">過去3年</span>
                     </div>
                     <label className="block">成約事例
-                      <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.marketDeals} onChange={onEvalChange('marketDeals')}>
-                        {evalOptions.marketDeals.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      <select className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-500" value={evalForm.marketDeals} disabled>
+                        <option value="pending_auto">過去成約事例が登録されたら自動計算されます</option>
                       </select>
                     </label>
                     <label className="block">賃貸需要
