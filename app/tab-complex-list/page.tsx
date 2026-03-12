@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
+import {
+  diffDays,
+  diffFromBaseDateDays,
+  shouldShowStockTimingAlert,
+} from '@/lib/stockTimingAlert'
 import { getSupabase } from '@/lib/supabaseClient'
 
 type Complex = {
@@ -122,28 +127,10 @@ function calcUnitPrice(price: number | null | undefined, area: number | null | u
   return Math.round(p / a)
 }
 
-function diffDays(start: string | null, end: string | null): number | null {
-  if (!start || !end) return null
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null
-  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000)
-}
-
-function diffFromTodayDays(date: string | null): number | null {
-  if (!date) return null
-  const d = new Date(date)
-  if (Number.isNaN(d.getTime())) return null
-  const ms = Math.abs(Date.now() - d.getTime())
-  return Math.round(ms / 86400000)
-}
-
 function fmtYen(n: number | null): string {
   if (n == null) return '—'
   return `${Math.round(n).toLocaleString('ja-JP')}円`
 }
-
-const STOCK_ALERT_LEAD_DAYS = 5
 
 export default function TabComplexListPage() {
   const supabase = getSupabase()
@@ -249,9 +236,12 @@ export default function TabComplexListPage() {
           const maxDeal = maxDealByComplex.get(r.id)
           const miniDeal = miniDealByComplex.get(r.id)
           const stockCount = stockCountByComplex.get(r.id) ?? 0
-          const stockDaysOldest = diffFromTodayDays(oldestRegisteredByComplex.get(r.id) ?? null)
-          const stockAlertDays = miniDeal?.elapsedDays != null ? Math.max(miniDeal.elapsedDays - STOCK_ALERT_LEAD_DAYS, 0) : null
-          const showStockTimingAlert = stockCount > 0 && stockDaysOldest != null && stockAlertDays != null && stockDaysOldest >= stockAlertDays
+          const stockDaysOldest = diffFromBaseDateDays(oldestRegisteredByComplex.get(r.id) ?? null, new Date())
+          const { stockAlertDays, showStockTimingAlert } = shouldShowStockTimingAlert({
+            stockCount,
+            stockDaysOldest,
+            miniElapsedDays: miniDeal?.elapsedDays ?? null,
+          })
           return {
             id: r.id,
             name: r.name,
@@ -521,6 +511,16 @@ export default function TabComplexListPage() {
                                 <div className="text-[11px]">経過日数: <span className="num">{c.stockDaysOldest != null ? `${c.stockDaysOldest}日` : '—'}</span></div>
                                 <div className="text-[11px]">アラート基準: <span className="num">{c.stockAlertDays != null ? `${c.stockAlertDays}日` : '—'}</span></div>
                               </div>
+                            </div>
+                            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-500">
+                              適正仕入れタイミング条件:
+                              {' '}
+                              在庫&gt;0 / 最古在庫
+                              <span className="num">{c.stockDaysOldest != null ? `${c.stockDaysOldest}日` : '—'}</span>
+                              {' '}≥ 基準
+                              <span className="num">{c.stockAlertDays != null ? `${c.stockAlertDays}日` : '—'}</span>
+                              {' '}
+                              (MINI経過日数-5日)
                             </div>
                           </div>
                           <div className="text-right space-y-2">
