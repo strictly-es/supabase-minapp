@@ -5,6 +5,13 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
+import {
+  buildReferenceValueSummaries,
+  CONDITION_STATUS_OPTIONS,
+  type ConditionSummaryRow,
+  type FloorSummaryRow,
+  type ReferenceValueEntry,
+} from '@/lib/referenceValue'
 import { getSupabase } from '@/lib/supabaseClient'
 
 type Pref = '' | '東京' | '神奈川' | '千葉' | '埼玉' | '大阪' | '兵庫'
@@ -60,6 +67,14 @@ type StoredFactors = {
   location?: { walk?: StoredOption; access?: StoredOption; convenience?: StoredOption }
   building?: { scale?: StoredOption; elevator?: StoredOption; mgmt?: StoredOption; appearance?: StoredOption; parking?: StoredOption; view?: StoredOption }
   plus?: { future?: StoredOption; focus?: StoredOption; support?: StoredOption }
+}
+
+type MarketDealsValue = 'rich' | 'normal' | 'low' | 'unregistered'
+type MarketDealsAutoState = {
+  value: MarketDealsValue
+  contractCount: number
+  averagePerYear: number | null
+  ratioPerUnit: number | null
 }
 
 const prefOptions: Pref[] = ['東京', '神奈川', '千葉', '埼玉', '大阪', '兵庫', '']
@@ -208,6 +223,11 @@ function getScore(key: keyof Omit<EvalState, 'comment'>, state: EvalState): numb
   return opt?.score ?? 0
 }
 
+function formatUnitPrice(value: number | null): string {
+  if (value == null) return '—'
+  return `${value.toLocaleString('ja-JP', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}円/㎡`
+}
+
 export default function TabComplexEditPage() {
   const supabase = getSupabase()
   const router = useRouter()
@@ -215,6 +235,16 @@ export default function TabComplexEditPage() {
   const id = params?.id as string | undefined
   const [form, setForm] = useState<ComplexForm>(initialComplex)
   const [evalForm, setEvalForm] = useState<EvalState>(initialEval)
+  const [marketDealsAuto, setMarketDealsAuto] = useState<MarketDealsAutoState>({
+    value: 'unregistered',
+    contractCount: 0,
+    averagePerYear: null,
+    ratioPerUnit: null,
+  })
+  const [conditionSummaries, setConditionSummaries] = useState<ConditionSummaryRow[]>(
+    CONDITION_STATUS_OPTIONS.map((option) => ({ key: option.value, label: option.label, max: null, mean: null })),
+  )
+  const [floorSummaries, setFloorSummaries] = useState<FloorSummaryRow[]>([])
   const [builtAge, setBuiltAge] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -223,6 +253,96 @@ export default function TabComplexEditPage() {
   useEffect(() => {
     setBuiltAge(calcBuiltAge(form.builtYm))
   }, [form.builtYm])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function syncMarketDeals() {
+      if (!id) return
+      try {
+        const since = new Date()
+        since.setFullYear(since.getFullYear() - 3)
+        const sinceText = since.toISOString()
+        const { count, error } = await supabase
+          .from('estate_entries')
+          .select('id', { count: 'exact', head: true })
+          .eq('complex_id', id)
+          .is('deleted_at', null)
+          .gte('contract_date', sinceText)
+        if (error) throw error
+
+        const contractCount = count ?? 0
+        const unitCount = Number.parseInt(form.unitCount, 10)
+        const denominator = Number.isFinite(unitCount) && unitCount > 0 ? unitCount : null
+        const averagePerYear = contractCount > 0 ? contractCount / 3 : 0
+        const ratioPerUnit = denominator && denominator > 0 ? averagePerYear / denominator : null
+        const value: MarketDealsValue =
+          contractCount === 0
+            ? 'unregistered'
+            : ratioPerUnit != null && ratioPerUnit >= 0.03
+              ? 'rich'
+              : contractCount >= 5
+                ? 'normal'
+                : 'low'
+
+        if (!mounted) return
+        setMarketDealsAuto({
+          value,
+          contractCount,
+          averagePerYear,
+          ratioPerUnit,
+        })
+        setEvalForm((prev) => ({ ...prev, marketDeals: value }))
+      } catch (e) {
+        console.error('[complex/edit:marketDeals:auto]', e)
+        if (!mounted) return
+        setMarketDealsAuto({
+          value: 'unregistered',
+          contractCount: 0,
+          averagePerYear: null,
+          ratioPerUnit: null,
+        })
+        setEvalForm((prev) => ({ ...prev, marketDeals: 'unregistered' }))
+      }
+    }
+
+    syncMarketDeals().catch(console.error)
+    return () => { mounted = false }
+  }, [supabase, id, form.unitCount])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadConditionSummaries() {
+      if (!id) return
+      try {
+        const { data, error } = await supabase
+          .from('estate_entries')
+          .select('condition_status, floor, unit_price, contract_price, area_sqm')
+          .eq('complex_id', id)
+          .is('deleted_at', null)
+          .limit(5000)
+        if (error) throw error
+
+        const { conditionSummaries: summaries, floorSummaries: floorSummaryRows } =
+          buildReferenceValueSummaries((data ?? []) as ReferenceValueEntry[])
+
+        if (mounted) {
+          setConditionSummaries(summaries)
+          setFloorSummaries(floorSummaryRows)
+        }
+      } catch (e) {
+        console.error('[complex/edit:condition-summary]', e)
+        if (mounted) {
+          setConditionSummaries(CONDITION_STATUS_OPTIONS.map((option) => ({ key: option.value, label: option.label, max: null, mean: null })))
+          setFloorSummaries([])
+        }
+      }
+    }
+
+    loadConditionSummaries().catch(console.error)
+    return () => { mounted = false }
+  }, [supabase, id])
 
   useEffect(() => {
     let mounted = true
@@ -325,6 +445,14 @@ export default function TabComplexEditPage() {
   }, [evalForm])
 
   const totalScore = useMemo(() => categoryTotals.market + categoryTotals.loc + categoryTotals.bld + categoryTotals.plus, [categoryTotals])
+
+  const marketDealsOptions = useMemo(() => {
+    if (marketDealsAuto.value !== 'unregistered') return evalOptions.marketDeals
+    return [
+      { value: 'unregistered', label: '過去成約情報が登録されていません', score: 0 },
+      ...evalOptions.marketDeals,
+    ]
+  }, [marketDealsAuto.value])
 
   const onComplexChange = <K extends keyof ComplexForm>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
@@ -589,8 +717,13 @@ export default function TabComplexEditPage() {
                     </div>
                     <label className="block">成約事例
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.marketDeals} onChange={onEvalChange('marketDeals')}>
-                        {evalOptions.marketDeals.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        {marketDealsOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {marketDealsAuto.value === 'unregistered'
+                          ? '該当団地の過去成約情報が登録されていません'
+                          : `直近3年 ${marketDealsAuto.contractCount}件 / 年平均 ${marketDealsAuto.averagePerYear?.toFixed(2) ?? '—'}件 / 戸数比 ${marketDealsAuto.ratioPerUnit != null ? `${(marketDealsAuto.ratioPerUnit * 100).toFixed(2)}%` : '—'}`}
+                      </div>
                     </label>
                     <label className="block">賃貸需要
                       <select className="mt-1 w-full border rounded-lg px-3 py-2" value={evalForm.rentDemand} onChange={onEvalChange('rentDemand')}>
@@ -687,6 +820,73 @@ export default function TabComplexEditPage() {
                       <label className="block text-sm">総合コメント
                         <textarea rows={3} className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="メモ／定性的な補足" value={evalForm.comment} onChange={onEvalChange('comment')} />
                       </label>
+                    </div>
+                    <div className="pt-3">
+                      <div className="text-sm font-medium text-gray-700">参考値（状態別㎡単価）</div>
+                      <div className="mt-1 text-xs text-gray-500 space-y-1">
+                        <div>計算式:</div>
+                        <div>`max` = 各状態に属する過去成約の㎡単価の最大値</div>
+                        <div>`mean` = 各状態に属する過去成約の㎡単価の平均値</div>
+                      </div>
+                      <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                              <th className="px-3 py-2 text-left">状態</th>
+                              <th className="px-3 py-2 text-right">max</th>
+                              <th className="px-3 py-2 text-right">mean</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {conditionSummaries.map((summary) => (
+                              <tr key={summary.key} className="border-t border-gray-200">
+                                <td className="px-3 py-2">{summary.label}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatUnitPrice(summary.max)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatUnitPrice(summary.mean)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="pt-3">
+                      <div className="text-sm font-medium text-gray-700">参考値（階数別㎡単価・係数）</div>
+                      <div className="mt-1 text-xs text-gray-500 space-y-1">
+                        <div>計算式:</div>
+                        <div>`max` = 各階の過去成約㎡単価の最大値</div>
+                        <div>`mean` = 各階の過去成約㎡単価の平均値</div>
+                        <div>`係数` = 1階は1固定、2階以上は `mean ÷ 200000`</div>
+                        <div>注意: 1階は 平均㎡単価20万とする（固定）</div>
+                      </div>
+                      <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                              <th className="px-3 py-2 text-left">階数</th>
+                              <th className="px-3 py-2 text-right">max</th>
+                              <th className="px-3 py-2 text-right">mean</th>
+                              <th className="px-3 py-2 text-right">係数</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {floorSummaries.map((summary) => (
+                              <tr key={summary.floor} className="border-t border-gray-200">
+                                <td className="px-3 py-2">{summary.floor}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatUnitPrice(summary.max)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatUnitPrice(summary.mean)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {summary.coef != null ? summary.coef.toLocaleString('ja-JP', { minimumFractionDigits: summary.floor === 1 ? 0 : 2, maximumFractionDigits: 2 }) : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                            {floorSummaries.length === 0 && (
+                              <tr className="border-t border-gray-200">
+                                <td className="px-3 py-2 text-gray-500" colSpan={4}>階数別参考値はありません。</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </div>
