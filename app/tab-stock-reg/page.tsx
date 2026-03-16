@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { toIntOrNull } from '@/lib/entryMath'
 import { buildFloorRows, calcBaseUnitPrice, safeNumber } from '@/lib/stockPricing'
 import {
@@ -13,6 +13,7 @@ import {
   uploadStockPdf,
 } from '@/lib/repositories/stocks'
 import { getSupabase } from '@/lib/supabaseClient'
+import { useClientSearchParams } from '@/lib/useClientSearchParams'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 import StockForm from '../tab-stock/StockForm'
@@ -36,7 +37,7 @@ function toErrorMessage(e: unknown): string {
 export default function StockRegPage() {
   const supabase = getSupabase()
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const requestedEntryId = searchParams?.get('entryId') ?? ''
   const requestedComplexId = searchParams?.get('complexId') ?? ''
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { useSearchParams } from 'next/navigation'
 import {
   applyDraftToRow,
   buildLabelSpecificResetPayload,
@@ -26,6 +25,7 @@ import {
   updateTabListEntry,
 } from '@/lib/repositories/tabList'
 import { getSupabase } from '@/lib/supabaseClient'
+import { useClientSearchParams } from '@/lib/useClientSearchParams'
 import {
   parseDate,
   statusLabel,
@@ -39,7 +39,7 @@ import {
 
 export function useTabList() {
   const supabase = getSupabase()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
 
   const [complexes, setComplexes] = useState<ComplexOption[]>([])
   const [selectedComplexId, setSelectedComplexId] = useState('')

@@ -7,7 +7,7 @@ import UserEmail from '@/components/UserEmail'
 import { formatStockYen, mapStockRowsToCards, type StockCard, type StockRow } from '@/lib/stockCards'
 import { listStockComplexes, listStocksByComplex, softDeleteStock } from '@/lib/repositories/stocks'
 import { getSupabase } from '@/lib/supabaseClient'
-import { useSearchParams } from 'next/navigation'
+import { useClientSearchParams } from '@/lib/useClientSearchParams'
 
 type Complex = { id: string; name: string; pref: string | null; city: string | null }
 
@@ -19,7 +19,7 @@ function toErrorMessage(e: unknown): string {
 
 export default function TabStockClient() {
   const supabase = getSupabase()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const [complexes, setComplexes] = useState<Complex[]>([])
   const [selectedComplexId, setSelectedComplexId] = useState<string>('')
   const [cards, setCards] = useState<StockCard[]>([])

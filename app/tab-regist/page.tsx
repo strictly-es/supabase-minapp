@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   calcElapsedDays,
   calcUnitPriceFromStrings,
@@ -16,6 +16,7 @@ import {
 import { insertEntries, uploadEntryPdf } from '@/lib/repositories/entries'
 import { listTabListComplexes } from '@/lib/repositories/tabList'
 import { getSupabase } from '@/lib/supabaseClient'
+import { useClientSearchParams } from '@/lib/useClientSearchParams'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 
@@ -189,7 +190,7 @@ function compareRows(a: DealRow, b: DealRow, key: SortKey): number {
 function TabRegistPageContent() {
   const supabase = getSupabase()
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
 
   const [complexes, setComplexes] = useState<ComplexOption[]>([])
   const [selectedComplexId, setSelectedComplexId] = useState('')
