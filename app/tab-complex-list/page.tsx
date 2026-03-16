@@ -5,131 +5,20 @@ import Link from 'next/link'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 import {
-  diffDays,
-  diffFromBaseDateDays,
-  shouldShowStockTimingAlert,
-} from '@/lib/stockTimingAlert'
+  formatYenOrDash,
+  mapComplexesToCards,
+  normalizePref,
+  type Card,
+  type ComplexRow,
+  type EntrySummaryRow,
+  type StockSummaryRow,
+} from '@/lib/complexCards'
 import { getSupabase } from '@/lib/supabaseClient'
-
-type Complex = {
-  id: string
-  name: string
-  pref: string | null
-  city: string | null
-  town: string | null
-  built_ym: string | null
-  built_age: number | null
-  station_name: string | null
-  station_access_type: string | null
-  station_minutes: number | null
-  unit_count: number | null
-  has_elevator: boolean | null
-  floor_coef_pattern: string | null
-  complex_evaluations?: {
-    id: string
-    total_score: number | null
-    factors: Record<string, unknown> | null
-    created_at: string
-  }[]
-}
-
-type Card = {
-  id: string
-  name: string
-  pref: string
-  addr: string
-  station: string
-  built: string
-  builtAge: number | null
-  units: string
-  score: number | null
-  hasElevator: boolean
-  floorPattern: string
-  area: number | null
-  market: number | null
-  loc: number | null
-  bld: number | null
-  plus: number | null
-  maxPrice: number | null
-  maxUnitPrice: number | null
-  miniPrice: number | null
-  miniUnitPrice: number | null
-  miniElapsedDays: number | null
-  stockCount: number
-  stockDaysOldest: number | null
-  stockAlertDays: number | null
-  showStockTimingAlert: boolean
-}
-
-type EntrySummaryRow = {
-  complex_id: string
-  contract_kind: 'MAX' | 'MINI' | null
-  max_price: number | null
-  past_min: number | null
-  area_sqm: number | null
-  reins_registered_date: string | null
-  contract_date: string | null
-}
-
-type StockSummaryRow = {
-  complex_id: string | null
-  registered_date: string | null
-}
-
-type FactorItem = { score?: number }
-type Factors = {
-  market?: { deals?: FactorItem; rentDemand?: FactorItem; inventory?: FactorItem }
-  location?: { walk?: FactorItem; access?: FactorItem; convenience?: FactorItem }
-  building?: { scale?: FactorItem; elevator?: FactorItem; mgmt?: FactorItem; appearance?: FactorItem; parking?: FactorItem; view?: FactorItem }
-  plus?: { future?: FactorItem; focus?: FactorItem; support?: FactorItem }
-}
 
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
-}
-
-function formatAddr(pref: string | null, city: string | null, town: string | null): string {
-  return [pref ?? '', city ?? '', town ?? ''].filter(Boolean).join(' ')
-}
-
-function formatStation(name: string | null, access: string | null, mins: number | null): string {
-  if (!name) return ''
-  const walk = mins ? `${access ?? ''}${mins}分` : access ?? ''
-  return `最寄: ${name}${walk ? ` (${walk})` : ''}`
-}
-
-function formatBuilt(ym: string | null, age: number | null): string {
-  if (!ym && age == null) return ''
-  const y = ym ? ym.replace('-', '/') : ''
-  return `${y}${age != null ? ` (築${age}年)` : ''}`.trim()
-}
-
-function normalizePref(pref: string | null): string {
-  if (!pref) return ''
-  return pref.replace(/(都|道|府|県)$/u, '')
-}
-
-function pickScore(item?: FactorItem): number {
-  if (!item || typeof item !== 'object') return 0
-  return typeof item.score === 'number' ? item.score : 0
-}
-
-function toValidNumber(v: number | null | undefined): number | null {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null
-}
-
-function calcUnitPrice(price: number | null | undefined, area: number | null | undefined): number | null {
-  const p = toValidNumber(price)
-  const a = toValidNumber(area)
-  if (p == null || a == null || a <= 0) return null
-  return Math.round(p / a)
-}
-
-function fmtYen(n: number | null): string {
-  if (n == null) return '—'
-  return `${Math.round(n).toLocaleString('ja-JP')}円`
 }
 
 export default function TabComplexListPage() {
@@ -161,13 +50,10 @@ export default function TabComplexListPage() {
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
         if (error) throw error
-        const rows = (data ?? []) as Complex[]
+        const rows = (data ?? []) as ComplexRow[]
         const ids = rows.map((r) => r.id).filter(Boolean)
-        const areaByComplex = new Map<string, number>()
-        const maxDealByComplex = new Map<string, { price: number | null; unitPrice: number | null }>()
-        const miniDealByComplex = new Map<string, { price: number | null; unitPrice: number | null; elapsedDays: number | null }>()
-        const stockCountByComplex = new Map<string, number>()
-        const oldestRegisteredByComplex = new Map<string, string>()
+        let entryRows: EntrySummaryRow[] = []
+        let stockRows: StockSummaryRow[] = []
         if (ids.length > 0) {
           const { data: entryData, error: entryError } = await supabase
             .from('estate_entries')
@@ -179,25 +65,7 @@ export default function TabComplexListPage() {
           if (entryError) {
             console.warn('failed to load entry info', entryError)
           } else {
-            const entryRows = (entryData ?? []) as EntrySummaryRow[]
-            for (const row of entryRows) {
-              if (!row.complex_id) continue
-              const area = toValidNumber(row.area_sqm)
-              if (area != null && !areaByComplex.has(row.complex_id)) areaByComplex.set(row.complex_id, area)
-              if (row.contract_kind === 'MAX' && !maxDealByComplex.has(row.complex_id)) {
-                maxDealByComplex.set(row.complex_id, {
-                  price: toValidNumber(row.max_price),
-                  unitPrice: calcUnitPrice(row.max_price, row.area_sqm),
-                })
-              }
-              if (row.contract_kind === 'MINI' && !miniDealByComplex.has(row.complex_id)) {
-                miniDealByComplex.set(row.complex_id, {
-                  price: toValidNumber(row.past_min),
-                  unitPrice: calcUnitPrice(row.past_min, row.area_sqm),
-                  elapsedDays: diffDays(row.reins_registered_date, row.contract_date),
-                })
-              }
-            }
+            entryRows = (entryData ?? []) as EntrySummaryRow[]
           }
 
           const { data: stockData, error: stockError } = await supabase
@@ -209,67 +77,10 @@ export default function TabComplexListPage() {
           if (stockError) {
             console.warn('failed to load stock info', stockError)
           } else {
-            const stockRows = (stockData ?? []) as StockSummaryRow[]
-            for (const row of stockRows) {
-              if (!row.complex_id) continue
-              stockCountByComplex.set(row.complex_id, (stockCountByComplex.get(row.complex_id) ?? 0) + 1)
-              if (!row.registered_date) continue
-              const rowDateMs = new Date(row.registered_date).getTime()
-              if (Number.isNaN(rowDateMs)) continue
-              const currentOldest = oldestRegisteredByComplex.get(row.complex_id)
-              if (!currentOldest || rowDateMs < new Date(currentOldest).getTime()) {
-                oldestRegisteredByComplex.set(row.complex_id, row.registered_date)
-              }
-            }
+            stockRows = (stockData ?? []) as StockSummaryRow[]
           }
         }
-        const mapped: Card[] = rows.map((r) => {
-          const evals = [...(r.complex_evaluations ?? [])].sort((a, b) => {
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          })
-          const latest = evals[0]
-          const factors = (latest?.factors ?? null) as Factors | null
-          const market = factors?.market ? pickScore(factors.market.deals) + pickScore(factors.market.rentDemand) + pickScore(factors.market.inventory) : null
-          const loc = factors?.location ? pickScore(factors.location.walk) + pickScore(factors.location.access) + pickScore(factors.location.convenience) : null
-          const bld = factors?.building ? pickScore(factors.building.scale) + pickScore(factors.building.elevator) + pickScore(factors.building.mgmt) + pickScore(factors.building.appearance) + pickScore(factors.building.parking) + pickScore(factors.building.view) : null
-          const plus = factors?.plus ? pickScore(factors.plus.future) + pickScore(factors.plus.focus) + pickScore(factors.plus.support) : null
-          const maxDeal = maxDealByComplex.get(r.id)
-          const miniDeal = miniDealByComplex.get(r.id)
-          const stockCount = stockCountByComplex.get(r.id) ?? 0
-          const stockDaysOldest = diffFromBaseDateDays(oldestRegisteredByComplex.get(r.id) ?? null, new Date())
-          const { stockAlertDays, showStockTimingAlert } = shouldShowStockTimingAlert({
-            stockCount,
-            stockDaysOldest,
-            miniElapsedDays: miniDeal?.elapsedDays ?? null,
-          })
-          return {
-            id: r.id,
-            name: r.name,
-            pref: r.pref ?? '',
-            addr: formatAddr(r.pref, r.city, r.town),
-            station: formatStation(r.station_name, r.station_access_type, r.station_minutes),
-            built: formatBuilt(r.built_ym, r.built_age),
-            builtAge: r.built_age ?? null,
-            units: r.unit_count != null ? `${r.unit_count}戸` : '',
-            score: latest?.total_score ?? null,
-            hasElevator: r.has_elevator ?? false,
-            floorPattern: r.floor_coef_pattern ?? '',
-            area: areaByComplex.get(r.id) ?? null,
-            market,
-            loc,
-            bld,
-            plus,
-            maxPrice: maxDeal?.price ?? null,
-            maxUnitPrice: maxDeal?.unitPrice ?? null,
-            miniPrice: miniDeal?.price ?? null,
-            miniUnitPrice: miniDeal?.unitPrice ?? null,
-            miniElapsedDays: miniDeal?.elapsedDays ?? null,
-            stockCount,
-            stockDaysOldest,
-            stockAlertDays,
-            showStockTimingAlert,
-          }
-        })
+        const mapped = mapComplexesToCards(rows, entryRows, stockRows)
         if (mounted) setCards(mapped)
       } catch (e) {
         console.error(e)
@@ -496,13 +307,13 @@ export default function TabComplexListPage() {
                             <div className="mt-2 grid md:grid-cols-3 gap-2 text-xs">
                               <div className="px-2 py-1.5 rounded-lg bg-rose-50 text-rose-700">
                                 <div className="text-[11px] text-rose-500">過去MAX</div>
-                                <div className="font-semibold num">{fmtYen(c.maxPrice)}</div>
-                                <div className="text-[11px]">㎡単価: <span className="num">{c.maxUnitPrice != null ? `${fmtYen(c.maxUnitPrice)}/㎡` : '—'}</span></div>
+                                <div className="font-semibold num">{formatYenOrDash(c.maxPrice)}</div>
+                                <div className="text-[11px]">㎡単価: <span className="num">{c.maxUnitPrice != null ? `${formatYenOrDash(c.maxUnitPrice)}/㎡` : '—'}</span></div>
                               </div>
                               <div className="px-2 py-1.5 rounded-lg bg-teal-50 text-teal-700">
                                 <div className="text-[11px] text-teal-500">過去MINI</div>
-                                <div className="font-semibold num">{fmtYen(c.miniPrice)}</div>
-                                <div className="text-[11px]">㎡単価: <span className="num">{c.miniUnitPrice != null ? `${fmtYen(c.miniUnitPrice)}/㎡` : '—'}</span></div>
+                                <div className="font-semibold num">{formatYenOrDash(c.miniPrice)}</div>
+                                <div className="text-[11px]">㎡単価: <span className="num">{c.miniUnitPrice != null ? `${formatYenOrDash(c.miniUnitPrice)}/㎡` : '—'}</span></div>
                                 <div className="text-[11px]">経過日数: <span className="num">{c.miniElapsedDays != null ? `${c.miniElapsedDays}日` : '—'}</span></div>
                               </div>
                               <div className="px-2 py-1.5 rounded-lg bg-gray-100 text-gray-700">

@@ -3,6 +3,21 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { buildLabelSpecificResetPayload } from '@/lib/entryDrafts'
+import {
+  calcElapsedDays,
+  calcUnitPriceFromStrings,
+  effectivePrice,
+  elevatorChoiceToDb,
+  monthToDateOrNull,
+  toDateInputValue,
+  toDateOrNull,
+  toFloatOrNull,
+  toIntOrNull,
+  toMonthInputValue,
+} from '@/lib/entryMath'
+import { updateEntry, uploadEntryPdf } from '@/lib/repositories/entries'
+import { hasEntryKindConflict, listTabListComplexes } from '@/lib/repositories/tabList'
 import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
@@ -97,52 +112,6 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-function toInt(v: string): number | null {
-  if (!v.trim()) return null
-  const n = Number.parseInt(v, 10)
-  return Number.isFinite(n) ? n : null
-}
-
-function toFloat(v: string): number | null {
-  if (!v.trim()) return null
-  const n = Number.parseFloat(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function toDateInput(v: string | null): string {
-  if (!v) return ''
-  return v.includes('T') ? v.slice(0, 10) : v
-}
-
-function toMonthInput(v: string | null): string {
-  if (!v) return ''
-  const datePart = v.includes('T') ? v.slice(0, 10) : v
-  return datePart.slice(0, 7)
-}
-
-function toDateOrNull(v: string): string | null {
-  return v ? v : null
-}
-
-function monthToDateOrNull(v: string): string | null {
-  return v ? `${v}-01` : null
-}
-
-function calcUnitPrice(price: string, area: string): number | null {
-  const p = toFloat(price)
-  const a = toFloat(area)
-  if (p == null || a == null || a <= 0) return null
-  return Math.round((p / a) * 100) / 100
-}
-
-function calcElapsedDays(reinsDate: string, contractDate: string): number | null {
-  if (!reinsDate || !contractDate) return null
-  const reins = new Date(`${reinsDate}T00:00:00`)
-  const contract = new Date(`${contractDate}T00:00:00`)
-  if (Number.isNaN(reins.getTime()) || Number.isNaN(contract.getTime())) return null
-  return Math.round((contract.getTime() - reins.getTime()) / 86400000)
-}
-
 function formatDateWithEra(v: string): string {
   if (!v) return '—'
   const d = new Date(`${v}T00:00:00`)
@@ -156,41 +125,6 @@ function formatMonthWithEra(v: string): string {
   if (Number.isNaN(d.getTime())) return '—'
   const [y, m] = v.split('-')
   return `${y}年${m}月 (${warekiMonthFormatter.format(d)})`
-}
-
-function elevatorToDb(v: ElevatorChoice): boolean | null {
-  if (v === 'あり') return true
-  if (v === 'なし') return false
-  return null
-}
-
-function priceFromRow(row: EntryRow): number | null {
-  if (typeof row.contract_price === 'number' && Number.isFinite(row.contract_price)) return row.contract_price
-  if (typeof row.max_price === 'number' && Number.isFinite(row.max_price)) return row.max_price
-  if (typeof row.past_min === 'number' && Number.isFinite(row.past_min)) return row.past_min
-  return null
-}
-
-function buildLabelSpecificResetPayload(previousKind: EntryRow['contract_kind'], nextKind: DealLabel) {
-  if (previousKind === nextKind) return {}
-  if (nextKind === 'MAX') {
-    return {
-      renovated: null,
-    }
-  }
-  if (nextKind === 'MINI') {
-    return {
-      coef_total: null,
-      interior_level_coef: null,
-      contract_year_coef: null,
-    }
-  }
-  return {
-    coef_total: null,
-    interior_level_coef: null,
-    contract_year_coef: null,
-    renovated: null,
-  }
 }
 
 export default function EntryEditPage() {
@@ -216,7 +150,7 @@ export default function EntryEditPage() {
     [complexes, selectedComplexId],
   )
 
-  const unitPrice = useMemo(() => calcUnitPrice(form.price, form.area), [form.price, form.area])
+  const unitPrice = useMemo(() => calcUnitPriceFromStrings(form.price, form.area), [form.price, form.area])
   const elapsedDays = useMemo(() => calcElapsedDays(form.reinsDate, form.contractDate), [form.reinsDate, form.contractDate])
 
   useEffect(() => {
@@ -224,23 +158,7 @@ export default function EntryEditPage() {
     async function loadComplexes() {
       setLoadingComplexes(true)
       try {
-        const { data, error } = await supabase
-          .from('housing_complexes')
-          .select('id, name, pref, city, town, station_name, station_access_type, station_minutes, unit_count')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        const list = (data ?? []).map((row) => ({
-          id: row.id as string,
-          name: (row.name as string | null) ?? '(名称未設定)',
-          pref: (row.pref as string | null) ?? null,
-          city: (row.city as string | null) ?? null,
-          town: (row.town as string | null) ?? null,
-          stationName: (row.station_name as string | null) ?? null,
-          stationAccessType: (row.station_access_type as string | null) ?? null,
-          stationMinutes: (row.station_minutes as number | null) ?? null,
-          unitCount: (row.unit_count as number | null) ?? null,
-        }))
+        const list = await listTabListComplexes(supabase)
         if (mounted) setComplexes(list)
       } catch (e) {
         console.error(e)
@@ -281,16 +199,16 @@ export default function EntryEditPage() {
           setExistingPdfPath(row.mysoku_pdf_path ?? null)
           setForm({
             elevator: row.has_elevator === true ? 'あり' : row.has_elevator === false ? 'なし' : 'スキップ',
-            builtYm: toMonthInput(row.built_month),
+            builtYm: toMonthInputValue(row.built_month),
             buildingNo: typeof row.building_no === 'number' ? String(row.building_no) : '',
             floor: typeof row.floor === 'number' ? String(row.floor) : '',
             price: (() => {
-              const p = priceFromRow(row)
+              const p = effectivePrice(row)
               return typeof p === 'number' ? String(p) : ''
             })(),
             area: typeof row.area_sqm === 'number' ? String(row.area_sqm) : '',
-            reinsDate: toDateInput(row.reins_registered_date),
-            contractDate: toDateInput(row.contract_date),
+            reinsDate: toDateInputValue(row.reins_registered_date),
+            contractDate: toDateInputValue(row.contract_date),
             status: (row.condition_status ?? '') as ConditionStatus,
             label: row.contract_kind ?? '',
             pdf: null,
@@ -336,17 +254,6 @@ export default function EntryEditPage() {
     }
   }
 
-  async function uploadPdf(file: File, userId: string, label: DealLabel): Promise<string> {
-    const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
-    const path = `${userId}/mysoku/${Date.now()}-${label || 'NONE'}-${safeName}`
-    const { error } = await supabase.storage.from('uploads').upload(path, file, {
-      upsert: false,
-      contentType: 'application/pdf',
-    })
-    if (error) throw new Error('PDFアップロード失敗: ' + error.message)
-    return path
-  }
-
   async function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault()
     if (!entryId) return
@@ -367,16 +274,8 @@ export default function EntryEditPage() {
       if (!user) throw new Error('ログインが必要です')
 
       if (form.label) {
-        const { data: conflictRows, error: conflictError } = await supabase
-          .from('estate_entries')
-          .select('id')
-          .eq('complex_id', selectedComplexId)
-          .eq('contract_kind', form.label)
-          .neq('id', entryId)
-          .is('deleted_at', null)
-          .limit(1)
-        if (conflictError) throw conflictError
-        if ((conflictRows ?? []).length > 0) {
+        const hasConflict = await hasEntryKindConflict(supabase, selectedComplexId, form.label, entryId)
+        if (hasConflict) {
           setMsg(`${form.label}ラベルは同じ団地内で1件のみ指定できます`)
           setSaving(false)
           return
@@ -385,23 +284,23 @@ export default function EntryEditPage() {
 
       let pdfPath = form.label ? existingPdfPath : null
       if (form.pdf) {
-        pdfPath = await uploadPdf(form.pdf, user.id, form.label)
+        pdfPath = await uploadEntryPdf(supabase, form.pdf, user.id, 'entry-edit', form.label)
       }
 
-      const price = toInt(form.price)
+      const price = toIntOrNull(form.price)
       const kind = form.label || null
       const payload = {
         estate_name: selectedComplex.name,
         complex_id: selectedComplex.id,
-        has_elevator: elevatorToDb(form.elevator),
+        has_elevator: elevatorChoiceToDb(form.elevator),
         built_month: monthToDateOrNull(form.builtYm),
-        building_no: toInt(form.buildingNo),
-        floor: toInt(form.floor),
+        building_no: toIntOrNull(form.buildingNo),
+        floor: toIntOrNull(form.floor),
         contract_price: price,
         max_price: kind === 'MAX' ? price : null,
         past_min: kind === 'MINI' ? price : null,
-        area_sqm: toFloat(form.area),
-        unit_price: calcUnitPrice(form.price, form.area),
+        area_sqm: toFloatOrNull(form.area),
+        unit_price: calcUnitPriceFromStrings(form.price, form.area),
         reins_registered_date: toDateOrNull(form.reinsDate),
         contract_date: toDateOrNull(form.contractDate),
         condition_status: form.status || null,
@@ -410,11 +309,7 @@ export default function EntryEditPage() {
         ...buildLabelSpecificResetPayload(originalContractKind, form.label),
       }
 
-      const { error } = await supabase
-        .from('estate_entries')
-        .update(payload)
-        .eq('id', entryId)
-      if (error) throw error
+      await updateEntry(supabase, entryId, payload)
 
       setExistingPdfPath(pdfPath)
       setExistingPdfSignedUrl(null)

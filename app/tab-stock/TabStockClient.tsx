@@ -4,58 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
+import { formatStockYen, mapStockRowsToCards, type StockCard, type StockRow } from '@/lib/stockCards'
+import { listStockComplexes, listStocksByComplex, softDeleteStock } from '@/lib/repositories/stocks'
 import { getSupabase } from '@/lib/supabaseClient'
 import { useSearchParams } from 'next/navigation'
 
 type Complex = { id: string; name: string; pref: string | null; city: string | null }
-
-type StockRow = {
-  id: string
-  complex_id: string | null
-  estate_entry_id: string | null
-  floor: number | null
-  area_sqm: number | null
-  layout: string | null
-  registered_date: string | null
-  contract_date: string | null
-  list_price: number | null
-  target_unit_price: number | null
-  target_close_price: number | null
-  buy_target_price: number | null
-  raise_price: number | null
-  base_unit_price: number | null
-  coef_total: number | null
-  floor_coef: number | null
-  status: string | null
-  stock_mysoku_path: string | null
-  estate_entries?: {
-    renovated: boolean | null
-    contract_kind: string | null
-    estate_name: string | null
-  } | {
-    renovated: boolean | null
-    contract_kind: string | null
-    estate_name: string | null
-  }[] | null
-}
-
-type Card = {
-  id: string
-  floor: number | null
-  area: number
-  layout: string
-  reg: string
-  contract: string
-  price: number
-  unit: number
-  targetUnit: number
-  targetPrice: number
-  buyTarget: number
-  raise: number
-  status: string
-  days: number
-  renovated: boolean | null
-}
 
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message
@@ -63,23 +17,12 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e) } catch { return 'Unknown error' }
 }
 
-function safeNum(n: number | null | undefined): number { return typeof n === 'number' && Number.isFinite(n) ? n : 0 }
-function parseDate(s: string | null): Date | null { if (!s) return null; const d = new Date(s); return Number.isNaN(+d) ? null : d }
-function diffDays(a: string | null): number {
-  const da = parseDate(a)
-  if (!da) return 0
-  const now = new Date()
-  const ms = Math.abs(+now - +da)
-  return Math.round(ms / 86400000)
-}
-function fmtYen(n: number): string { return n.toLocaleString('ja-JP') + ' 円' }
-
 export default function TabStockClient() {
   const supabase = getSupabase()
   const searchParams = useSearchParams()
   const [complexes, setComplexes] = useState<Complex[]>([])
   const [selectedComplexId, setSelectedComplexId] = useState<string>('')
-  const [cards, setCards] = useState<Card[]>([])
+  const [cards, setCards] = useState<StockCard[]>([])
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -96,18 +39,7 @@ export default function TabStockClient() {
     let mounted = true
     async function loadComplexes() {
       try {
-        const { data, error } = await supabase
-          .from('housing_complexes')
-          .select('id, name, pref, city')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        const list = (data ?? []).map((c) => ({
-          id: c.id as string,
-          name: (c.name as string) ?? '(名称未設定)',
-          pref: (c.pref as string | null) ?? null,
-          city: (c.city as string | null) ?? null,
-        }))
+        const list = await listStockComplexes(supabase)
         if (mounted) {
           setComplexes(list)
           const qsId = searchParams?.get('complexId') ?? ''
@@ -131,58 +63,8 @@ export default function TabStockClient() {
     async function loadStocks() {
       setLoading(true); setMsg('')
       try {
-        const { data, error } = await supabase
-          .from('estate_stocks')
-          .select(`
-            id, complex_id, estate_entry_id, floor, area_sqm, layout, registered_date, contract_date, list_price,
-            target_unit_price, target_close_price, buy_target_price, raise_price,
-            base_unit_price, coef_total, floor_coef, status, stock_mysoku_path,
-            estate_entries ( renovated, contract_kind, estate_name )
-          `)
-          .eq('complex_id', selectedComplexId)
-          .is('deleted_at', null)
-          .order('registered_date', { ascending: false, nullsFirst: false })
-          .limit(500)
-        if (error) throw error
-        const rows = (data ?? []) as StockRow[]
-        const mapped: Card[] = rows.map((r) => {
-          const entry = Array.isArray(r.estate_entries) ? (r.estate_entries[0] ?? null) : (r.estate_entries ?? null)
-          const area = safeNum(r.area_sqm)
-          const listPrice = safeNum(r.list_price)
-          const unitStored = safeNum(r.target_unit_price)
-          const baseUnit = safeNum(r.base_unit_price)
-          const coef = safeNum(r.coef_total) || 1
-          const floorCoef = safeNum(r.floor_coef) || 1
-          const unit = area > 0 ? Math.round(listPrice / area) : 0
-          const targetUnit = unitStored || Math.round(baseUnit * coef * floorCoef)
-          const targetPriceStored = safeNum(r.target_close_price)
-          const targetPrice = targetPriceStored || Math.round(targetUnit * area)
-          const raiseStored = safeNum(r.raise_price)
-          const raise = raiseStored || Math.floor((targetPrice / 1.21) / 10000) * 10000
-          const buyStored = safeNum(r.buy_target_price)
-          const moveCost = area < 60 ? Math.round(area * 132000) : (area >= 80 ? Math.round(area * 123000) : Math.round(area * (132000 - (area - 60) * 400)))
-          const brokerage = raise < 10_000_000 ? 550_000 : Math.round(raise * 0.055)
-          const other = Math.round(raise * 0.075)
-          const buyTarget = buyStored || (raise - moveCost - brokerage - other)
-          return {
-            id: r.id,
-            floor: r.floor,
-            area,
-            layout: (r.layout ?? '').trim(),
-            reg: r.registered_date ?? '',
-            contract: r.contract_date ?? '',
-            price: listPrice,
-            unit,
-            targetUnit,
-            targetPrice,
-            buyTarget,
-            raise,
-            status: (r.status ?? '未設定') as string,
-            days: diffDays(r.registered_date),
-            renovated: entry?.renovated ?? null,
-          }
-        })
-        if (mounted) setCards(mapped)
+        const rows = await listStocksByComplex(supabase, selectedComplexId)
+        if (mounted) setCards(mapStockRowsToCards(rows as StockRow[]))
       } catch (e) {
         console.error(e)
         if (mounted) setMsg('在庫取得に失敗しました: ' + toErrorMessage(e))
@@ -234,13 +116,7 @@ export default function TabStockClient() {
       const { data: { user }, error: uerr } = await supabase.auth.getUser()
       if (uerr) throw uerr
       if (!user) throw new Error('ログインが必要です')
-      const payload: { deleted_at: string; deleted_by?: string } = { deleted_at: new Date().toISOString() }
-      if (user.id) payload.deleted_by = user.id
-      const { error } = await supabase
-        .from('estate_stocks')
-        .update(payload)
-        .eq('id', stockId)
-      if (error) throw error
+      await softDeleteStock(supabase, stockId, user.id)
       setMsg('削除しました')
       setReloadKey((k) => k + 1)
     } catch (e) {
@@ -358,11 +234,11 @@ export default function TabStockClient() {
                           {d.days > 0 && d.days < 45 && <span className="badge badge-new text-xs">NEW</span>}
                         </div>
                         <div className="grid md:grid-cols-5 gap-3 text-sm">
-                          <div><div className="text-gray-500">販売価格</div><div className="font-semibold num">{fmtYen(d.price)}</div></div>
-                          <div><div className="text-gray-500">㎡単価</div><div className="font-semibold num">{d.unit ? fmtYen(d.unit) : '—'}</div></div>
-                          <div><div className="text-gray-500">目標単価</div><div className="font-semibold num">{d.targetUnit ? fmtYen(d.targetUnit) : '—'}</div></div>
-                          <div><div className="text-gray-500">目標成約価格</div><div className="font-semibold num">{d.targetPrice ? fmtYen(d.targetPrice) : '—'}</div></div>
-                          <div><div className="text-gray-500">買付目標額</div><div className="font-semibold text-emerald-700 num">{d.buyTarget ? fmtYen(d.buyTarget) : '—'}</div></div>
+                          <div><div className="text-gray-500">販売価格</div><div className="font-semibold num">{formatStockYen(d.price)}</div></div>
+                          <div><div className="text-gray-500">㎡単価</div><div className="font-semibold num">{d.unit ? formatStockYen(d.unit) : '—'}</div></div>
+                          <div><div className="text-gray-500">目標単価</div><div className="font-semibold num">{d.targetUnit ? formatStockYen(d.targetUnit) : '—'}</div></div>
+                          <div><div className="text-gray-500">目標成約価格</div><div className="font-semibold num">{d.targetPrice ? formatStockYen(d.targetPrice) : '—'}</div></div>
+                          <div><div className="text-gray-500">買付目標額</div><div className="font-semibold text-emerald-700 num">{d.buyTarget ? formatStockYen(d.buyTarget) : '—'}</div></div>
                         </div>
                         <div className="flex items-center justify-between text-xs text-gray-500">
                           <span>経過: {d.days}日 / リノベ: {d.renovated == null ? '—' : d.renovated ? '有' : '無'} / ステータス: {d.status}</span>

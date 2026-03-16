@@ -3,31 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { createStockPdfSignedUrl, loadStockDetail, softDeleteStock, type StockDetailRow } from '@/lib/repositories/stocks'
 import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
-
-type Stock = {
-  id: string
-  estate_entry_id: string
-  floor: number | null
-  area_sqm: number | null
-  list_price: number | null
-  registered_date: string | null
-  stock_mysoku_path: string | null
-  broker_name: string | null
-  broker_pref: string | null
-  broker_city: string | null
-  broker_town: string | null
-  broker_tel: string | null
-  broker_person: string | null
-  broker_mobile: string | null
-  broker_email: string | null
-  broker_mysoku_url: string | null
-  broker_photo_url: string | null
-  fundplan_url: string | null
-  status: string | null
-}
+import StockBrokerSection from './StockBrokerSection'
+import StockLinksSection from './StockLinksSection'
+import StockPropertySection from './StockPropertySection'
+import type { StockDerived } from './stockDetailShared'
 
 function yen(n: number): string { return n.toLocaleString('ja-JP') }
 function parseDate(s: string | null): string { if (!s) return '-'; const d = new Date(s); return isNaN(+d) ? '-' : d.toLocaleDateString('ja-JP') }
@@ -37,7 +20,7 @@ export default function StockDetailPage() {
   const params = useParams<{ stockId: string }>()
   const stockId = params?.stockId as string | undefined
 
-  const [row, setRow] = useState<Stock | null>(null)
+  const [row, setRow] = useState<StockDetailRow | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [msg, setMsg] = useState<string>('')
 
@@ -49,13 +32,7 @@ export default function StockDetailPage() {
     try {
       const { data: { user }, error: uerr } = await supabase.auth.getUser()
       if (uerr) throw uerr
-      const payload: { deleted_at: string; deleted_by?: string } = { deleted_at: new Date().toISOString() }
-      if (user?.id) payload.deleted_by = user.id
-      const { error } = await supabase
-        .from('estate_stocks')
-        .update(payload)
-        .eq('id', stockId)
-      if (error) throw error
+      await softDeleteStock(supabase, stockId, user?.id)
       setMsg('削除しました。移動します...')
       if (row?.estate_entry_id) window.location.href = `/tab-detail/${row.estate_entry_id}`
       else window.location.href = '/tab-list'
@@ -70,17 +47,11 @@ export default function StockDetailPage() {
     async function run() {
       try {
         if (!stockId) return
-        const { data, error } = await supabase
-          .from('estate_stocks')
-          .select('id, estate_entry_id, floor, area_sqm, list_price, registered_date, stock_mysoku_path, broker_name, broker_pref, broker_city, broker_town, broker_tel, broker_person, broker_mobile, broker_email, broker_mysoku_url, broker_photo_url, fundplan_url, status')
-          .eq('id', stockId)
-          .maybeSingle()
-        if (error) throw error
-        const s = (data ?? null) as Stock | null
+        const s = await loadStockDetail(supabase, stockId)
         if (mounted) setRow(s)
         if (s?.stock_mysoku_path) {
-          const { data: signed } = await supabase.storage.from('uploads').createSignedUrl(s.stock_mysoku_path, 600)
-          if (mounted) setSignedUrl(signed?.signedUrl ?? null)
+          const url = await createStockPdfSignedUrl(supabase, s.stock_mysoku_path)
+          if (mounted) setSignedUrl(url)
         }
       } catch (e: unknown) {
         console.error(e)
@@ -91,7 +62,7 @@ export default function StockDetailPage() {
     return () => { mounted = false }
   }, [supabase, stockId])
 
-  const derived = useMemo(() => {
+  const derived = useMemo<StockDerived | null>(() => {
     if (!row) return null
     const area = typeof row.area_sqm === 'number' ? row.area_sqm : NaN
     const price = typeof row.list_price === 'number' ? row.list_price : NaN
@@ -155,43 +126,11 @@ export default function StockDetailPage() {
               </div>
             </div>
 
-            <section className="space-y-4">
-              <h3 className="font-semibold">物件情報</h3>
-              <dl className="grid md:grid-cols-3 gap-y-3 gap-x-6 text-sm">
-                <div><dt className="text-gray-500">階数</dt><dd>{row?.floor ?? '-'}</dd></div>
-                <div><dt className="text-gray-500">m²数</dt><dd className="num">{typeof row?.area_sqm === 'number' ? row.area_sqm.toFixed(2) : '-'}</dd></div>
-                <div><dt className="text-gray-500">販売価格</dt><dd className="num">{typeof row?.list_price === 'number' ? yen(row.list_price) : '-'}</dd></div>
-                <div><dt className="text-gray-500">m²単価</dt><dd className="num">{derived && !isNaN(derived.unit) ? `${derived.unit.toLocaleString('ja-JP')}` : '-'}</dd></div>
-                <div><dt className="text-gray-500">登録年月日</dt><dd>{parseDate(row?.registered_date ?? null)}</dd></div>
-                <div><dt className="text-gray-500">経過日数</dt><dd>{derived?.elapsed ?? '-'}</dd></div>
-              </dl>
-            </section>
+            <StockPropertySection row={row} derived={derived} parseDate={parseDate} yen={yen} />
 
-            <section className="space-y-4">
-              <h3 className="font-semibold">仲介不動産会社の情報</h3>
-              <dl className="grid md:grid-cols-3 gap-y-3 gap-x-6 text-sm">
-                <div><dt className="text-gray-500">社名</dt><dd>{row?.broker_name || '-'}</dd></div>
-                <div><dt className="text-gray-500">所在地（都道府県）</dt><dd>{row?.broker_pref || '-'}</dd></div>
-                <div><dt className="text-gray-500">所在地（市）</dt><dd>{row?.broker_city || '-'}</dd></div>
-                <div className="md:col-span-3"><dt className="text-gray-500">所在地（町村）</dt><dd>{row?.broker_town || '-'}</dd></div>
-                <div><dt className="text-gray-500">TEL</dt><dd>{row?.broker_tel || '-'}</dd></div>
-                <div><dt className="text-gray-500">担当者名</dt><dd>{row?.broker_person || '-'}</dd></div>
-                <div><dt className="text-gray-500">携帯</dt><dd>{row?.broker_mobile || '-'}</dd></div>
-                <div className="md:col-span-2"><dt className="text-gray-500">メールアドレス</dt><dd>{row?.broker_email || '-'}</dd></div>
-                <div><dt className="text-gray-500">マイソクPDF</dt><dd>{row?.broker_mysoku_url ? <a href={row.broker_mysoku_url} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">開く</a> : (signedUrl ? <a href={signedUrl} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">開く（Storage）</a> : <span className="text-gray-400">-</span>)}</dd></div>
-                <div><dt className="text-gray-500">現地写真</dt><dd>{row?.broker_photo_url ? <a href={row.broker_photo_url} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">開く</a> : <span className="text-gray-400">-</span>}</dd></div>
-              </dl>
-            </section>
+            <StockBrokerSection row={row} signedUrl={signedUrl} />
 
-            <section className="space-y-4">
-              <h3 className="font-semibold">ファンド収支事業計画</h3>
-              <div className="text-sm">{row?.fundplan_url ? <a href={row.fundplan_url} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">開く</a> : <span className="text-gray-400">-</span>}</div>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="font-semibold">ステータス</h3>
-              <div className="text-sm">{row?.status || '-'}</div>
-            </section>
+            <StockLinksSection row={row} />
 
             <div className="flex items-center justify-end gap-2">
               {row?.estate_entry_id ? (

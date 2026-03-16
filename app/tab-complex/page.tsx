@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
+import { insertComplex, insertComplexEvaluation } from '@/lib/repositories/complexes'
 import { getSupabase } from '@/lib/supabaseClient'
 
 type Pref = '' | '東京' | '神奈川' | '千葉' | '埼玉' | '大阪' | '兵庫'
@@ -267,13 +268,7 @@ export default function TabComplexPage() {
         updated_by: user.id,
       }
 
-      const { data: ins, error: insErr } = await supabase
-        .from('housing_complexes')
-        .insert(complexPayload)
-        .select('id')
-        .single()
-      if (insErr) throw new Error('団地保存失敗: ' + insErr.message)
-      const complexId = ins?.id as string
+      const complexId = await insertComplex(supabase, complexPayload)
 
       const factors = {
         market: {
@@ -301,7 +296,7 @@ export default function TabComplexPage() {
         },
       }
 
-      const { error: evalErr } = await supabase.from('complex_evaluations').insert({
+      await insertComplexEvaluation(supabase, {
         complex_id: complexId,
         total_score: totalScore,
         factors,
@@ -309,7 +304,6 @@ export default function TabComplexPage() {
         created_by: user.id,
         updated_by: user.id,
       })
-      if (evalErr) throw new Error('評価保存失敗: ' + evalErr.message)
 
       setMsg('保存しました')
       setForm(initialComplex)

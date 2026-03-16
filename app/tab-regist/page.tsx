@@ -3,6 +3,18 @@
 import { Suspense, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  calcElapsedDays,
+  calcUnitPriceFromStrings,
+  elevatorChoiceToDb,
+  formatUnitPrice,
+  monthToDateOrNull,
+  toDateOrNull,
+  toFloatOrNull,
+  toIntOrNull,
+} from '@/lib/entryMath'
+import { insertEntries, uploadEntryPdf } from '@/lib/repositories/entries'
+import { listTabListComplexes } from '@/lib/repositories/tabList'
 import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
@@ -111,42 +123,6 @@ function buildEmptyRow(seed: number): DealRow {
   }
 }
 
-function toInt(v: string): number | null {
-  if (!v.trim()) return null
-  const n = Number.parseInt(v, 10)
-  return Number.isFinite(n) ? n : null
-}
-
-function toFloat(v: string): number | null {
-  if (!v.trim()) return null
-  const n = Number.parseFloat(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function calcUnitPrice(price: string, area: string): number | null {
-  const p = toFloat(price)
-  const a = toFloat(area)
-  if (p == null || a == null || a <= 0) return null
-  return Math.round((p / a) * 100) / 100
-}
-
-function calcElapsedDays(reinsDate: string, contractDate: string): number | null {
-  if (!reinsDate || !contractDate) return null
-  const reins = new Date(`${reinsDate}T00:00:00`)
-  const contract = new Date(`${contractDate}T00:00:00`)
-  if (Number.isNaN(reins.getTime()) || Number.isNaN(contract.getTime())) return null
-  const diff = contract.getTime() - reins.getTime()
-  return Math.round(diff / 86400000)
-}
-
-function toDateOrNull(v: string): string | null {
-  return v ? v : null
-}
-
-function monthToDateOrNull(v: string): string | null {
-  return v ? `${v}-01` : null
-}
-
 function formatDateWithEra(v: string): string {
   if (!v) return '—'
   const d = new Date(`${v}T00:00:00`)
@@ -167,11 +143,6 @@ function formatYen(v: number | null): string {
   return `${Math.round(v).toLocaleString('ja-JP')}円`
 }
 
-function formatUnit(v: number | null): string {
-  if (v == null) return '—'
-  return `${v.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}円/㎡`
-}
-
 function isRowFilled(row: DealRow): boolean {
   return Boolean(
     row.builtYm ||
@@ -188,12 +159,6 @@ function isRowFilled(row: DealRow): boolean {
   )
 }
 
-function elevatorToDb(v: ElevatorChoice): boolean | null {
-  if (v === 'あり') return true
-  if (v === 'なし') return false
-  return null
-}
-
 function statusLabel(v: ConditionStatus): string {
   if (!v) return ''
   return STATUS_OPTIONS.find((x) => x.value === v)?.label ?? ''
@@ -201,8 +166,8 @@ function statusLabel(v: ConditionStatus): string {
 
 function compareRows(a: DealRow, b: DealRow, key: SortKey): number {
   if (key === 'price') {
-    const av = toFloat(a.price) ?? Number.NEGATIVE_INFINITY
-    const bv = toFloat(b.price) ?? Number.NEGATIVE_INFINITY
+    const av = toFloatOrNull(a.price) ?? Number.NEGATIVE_INFINITY
+    const bv = toFloatOrNull(b.price) ?? Number.NEGATIVE_INFINITY
     return av - bv
   }
   if (key === 'contract_date') {
@@ -214,8 +179,8 @@ function compareRows(a: DealRow, b: DealRow, key: SortKey): number {
     return statusLabel(a.status).localeCompare(statusLabel(b.status), 'ja')
   }
   if (key === 'floor') {
-    const av = toInt(a.floor) ?? Number.NEGATIVE_INFINITY
-    const bv = toInt(b.floor) ?? Number.NEGATIVE_INFINITY
+    const av = toIntOrNull(a.floor) ?? Number.NEGATIVE_INFINITY
+    const bv = toIntOrNull(b.floor) ?? Number.NEGATIVE_INFINITY
     return av - bv
   }
   return Number.parseInt(a.id, 10) - Number.parseInt(b.id, 10)
@@ -253,23 +218,7 @@ function TabRegistPageContent() {
     async function run() {
       setLoadingComplexes(true)
       try {
-        const { data, error } = await supabase
-          .from('housing_complexes')
-          .select('id, name, pref, city, town, station_name, station_access_type, station_minutes, unit_count')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        const list = (data ?? []).map((row) => ({
-          id: row.id as string,
-          name: (row.name as string | null) ?? '(名称未設定)',
-          pref: (row.pref as string | null) ?? null,
-          city: (row.city as string | null) ?? null,
-          town: (row.town as string | null) ?? null,
-          stationName: (row.station_name as string | null) ?? null,
-          stationAccessType: (row.station_access_type as string | null) ?? null,
-          stationMinutes: (row.station_minutes as number | null) ?? null,
-          unitCount: (row.unit_count as number | null) ?? null,
-        }))
+        const list = await listTabListComplexes(supabase)
         if (!mounted) return
         setComplexes(list)
 
@@ -318,18 +267,6 @@ function TabRegistPageContent() {
     })
   }
 
-  async function uploadPdf(file: File | null, userId: string, rowId: string, label: DealLabel): Promise<string | null> {
-    if (!file) return null
-    const sanitizedName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')
-    const path = `${userId}/mysoku/${Date.now()}-${label || 'NONE'}-${rowId}-${sanitizedName}`
-    const { error } = await supabase.storage.from('uploads').upload(path, file, {
-      upsert: false,
-      contentType: 'application/pdf',
-    })
-    if (error) throw new Error(`PDFアップロード失敗: ${error.message}`)
-    return path
-  }
-
   async function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault()
     setMsg('')
@@ -356,11 +293,11 @@ function TabRegistPageContent() {
         setMsg('PDF添付はMAX/MINIラベルが付いた行のみ可能です')
         return
       }
-      if (row.area && toFloat(row.area) == null) {
+      if (row.area && toFloatOrNull(row.area) == null) {
         setMsg('㎡数は数値で入力してください')
         return
       }
-      if (row.price && toInt(row.price) == null) {
+      if (row.price && toIntOrNull(row.price) == null) {
         setMsg('成約価格は整数で入力してください')
         return
       }
@@ -381,23 +318,23 @@ function TabRegistPageContent() {
       const payloads: Record<string, unknown>[] = []
 
       for (const row of activeRows) {
-        const pdfPath = await uploadPdf(row.pdf, user.id, row.id, row.label)
-        const price = toInt(row.price)
-        const unitPrice = calcUnitPrice(row.price, row.area)
+        const pdfPath = await uploadEntryPdf(supabase, row.pdf, user.id, row.id, row.label)
+        const price = toIntOrNull(row.price)
+        const unitPrice = calcUnitPriceFromStrings(row.price, row.area)
         const kind = row.label || null
 
         payloads.push({
           created_by: user.id,
           estate_name: selectedComplex.name,
           complex_id: selectedComplex.id,
-          has_elevator: elevatorToDb(row.elevator),
+          has_elevator: elevatorChoiceToDb(row.elevator),
           built_month: monthToDateOrNull(row.builtYm),
-          building_no: toInt(row.buildingNo),
-          floor: toInt(row.floor),
+          building_no: toIntOrNull(row.buildingNo),
+          floor: toIntOrNull(row.floor),
           contract_price: price,
           max_price: kind === 'MAX' ? price : null,
           past_min: kind === 'MINI' ? price : null,
-          area_sqm: toFloat(row.area),
+          area_sqm: toFloatOrNull(row.area),
           unit_price: unitPrice,
           reins_registered_date: toDateOrNull(row.reinsDate),
           contract_date: toDateOrNull(row.contractDate),
@@ -407,8 +344,7 @@ function TabRegistPageContent() {
         })
       }
 
-      const { error } = await supabase.from('estate_entries').insert(payloads)
-      if (error) throw error
+      await insertEntries(supabase, payloads)
 
       router.push(`/tab-list?complexId=${encodeURIComponent(selectedComplex.id)}`)
     } catch (e) {
@@ -558,7 +494,7 @@ function TabRegistPageContent() {
                   </thead>
                   <tbody>
                     {sortedRows.map((row, idx) => {
-                      const unitPrice = calcUnitPrice(row.price, row.area)
+                      const unitPrice = calcUnitPriceFromStrings(row.price, row.area)
                       const elapsedDays = calcElapsedDays(row.reinsDate, row.contractDate)
                       return (
                         <tr key={row.id} className="border-b align-top">
@@ -617,7 +553,7 @@ function TabRegistPageContent() {
                               value={row.price}
                               onChange={(e) => updateRowField(row.id, 'price', e.target.value)}
                             />
-                            <p className="text-[11px] text-gray-500 mt-1">{formatYen(toFloat(row.price))}</p>
+                            <p className="text-[11px] text-gray-500 mt-1">{formatYen(toFloatOrNull(row.price))}</p>
                           </td>
                           <td className="p-2 min-w-32">
                             <input
@@ -630,7 +566,7 @@ function TabRegistPageContent() {
                             />
                           </td>
                           <td className="p-2 min-w-36">
-                            <div className="w-full border rounded-lg px-2 py-1.5 bg-gray-50 text-gray-600">{formatUnit(unitPrice)}</div>
+                            <div className="w-full border rounded-lg px-2 py-1.5 bg-gray-50 text-gray-600">{formatUnitPrice(unitPrice)}</div>
                           </td>
                           <td className="p-2 min-w-44">
                             <input
