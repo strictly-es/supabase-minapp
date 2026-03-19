@@ -268,6 +268,16 @@ function TabRegistPageContent() {
     })
   }
 
+  function addRow() {
+    setRows((prev) => {
+      const maxId = prev.reduce((currentMax, row) => {
+        const id = Number.parseInt(row.id, 10)
+        return Number.isFinite(id) ? Math.max(currentMax, id) : currentMax
+      }, 0)
+      return [...prev, buildEmptyRow(maxId + 1)]
+    })
+  }
+
   async function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault()
     setMsg('')
@@ -642,13 +652,13 @@ function TabRegistPageContent() {
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* <button
+                <button
                   type="button"
                   className="px-3 py-2 bg-gray-100 rounded-lg text-sm"
                   onClick={addRow}
                 >
                   行を追加
-                </button> */}
+                </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-black text-white rounded-lg text-sm disabled:opacity-60"
