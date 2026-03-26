@@ -12,7 +12,7 @@ import {
   loadComplexEditSnapshot,
   loadComplexReferenceSummaries,
 } from '@/lib/repositories/complexEdit'
-import { CONDITION_STATUS_OPTIONS, type ConditionSummaryRow, type FloorSummaryRow } from '@/lib/referenceValue'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 import { getSupabase } from '@/lib/supabaseClient'
 import { ComplexBasicsSection } from './ComplexBasicsSection'
 import { ComplexEvaluationSection } from './ComplexEvaluationSection'
@@ -181,10 +181,7 @@ export default function TabComplexEditPage() {
     averagePerYear: null,
     ratioPerUnit: null,
   })
-  const [conditionSummaries, setConditionSummaries] = useState<ConditionSummaryRow[]>(
-    CONDITION_STATUS_OPTIONS.map((option) => ({ key: option.value, label: option.label, max: null, mean: null })),
-  )
-  const [floorSummaries, setFloorSummaries] = useState<FloorSummaryRow[]>([])
+  const [referenceRows, setReferenceRows] = useState<ReferenceValueEntry[]>([])
   const [builtAge, setBuiltAge] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -248,18 +245,16 @@ export default function TabComplexEditPage() {
     async function loadConditionSummaries() {
       if (!id) return
       try {
-        const { conditionSummaries: summaries, floorSummaries: floorSummaryRows } =
+        const { rows } =
           await loadComplexReferenceSummaries(supabase, id)
 
         if (mounted) {
-          setConditionSummaries(summaries)
-          setFloorSummaries(floorSummaryRows)
+          setReferenceRows(rows)
         }
       } catch (e) {
         console.error('[complex/edit:condition-summary]', e)
         if (mounted) {
-          setConditionSummaries(CONDITION_STATUS_OPTIONS.map((option) => ({ key: option.value, label: option.label, max: null, mean: null })))
-          setFloorSummaries([])
+          setReferenceRows([])
         }
       }
     }
@@ -492,8 +487,8 @@ export default function TabComplexEditPage() {
                 marketDealsAuto={marketDealsAuto}
                 categoryTotals={categoryTotals}
                 totalScore={totalScore}
-                conditionSummaries={conditionSummaries}
-                floorSummaries={floorSummaries}
+                referenceRows={referenceRows}
+                maxFloor={Number.parseInt(form.floorCount, 10) || null}
                 saving={saving}
                 onEvalChange={onEvalChange}
               />

@@ -8,7 +8,7 @@ import type {
   EvalState,
   MarketDealsAutoState,
 } from './complexEditShared'
-import type { ConditionSummaryRow, FloorSummaryRow } from '@/lib/referenceValue'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 
 type Props = {
   evalForm: EvalState
@@ -17,8 +17,8 @@ type Props = {
   marketDealsAuto: MarketDealsAutoState
   categoryTotals: CategoryTotals
   totalScore: number
-  conditionSummaries: ConditionSummaryRow[]
-  floorSummaries: FloorSummaryRow[]
+  referenceRows: ReferenceValueEntry[]
+  maxFloor: number | null
   saving: boolean
   onEvalChange: EvalChangeHandler
 }
@@ -30,8 +30,8 @@ export function ComplexEvaluationSection({
   marketDealsAuto,
   categoryTotals,
   totalScore,
-  conditionSummaries,
-  floorSummaries,
+  referenceRows,
+  maxFloor,
   saving,
   onEvalChange,
 }: Props) {
@@ -165,9 +165,13 @@ export function ComplexEvaluationSection({
               <textarea rows={3} className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="メモ／定性的な補足" value={evalForm.comment} onChange={onEvalChange('comment')} />
             </label>
           </div>
-          <ComplexReferenceSummaries conditionSummaries={conditionSummaries} floorSummaries={floorSummaries} />
         </div>
       </div>
+
+      <ComplexReferenceSummaries
+        referenceRows={referenceRows}
+        maxFloor={maxFloor}
+      />
 
       <div className="flex items-center justify-between rounded-xl border border-gray-200 p-4 bg-gray-50">
         <div>

@@ -103,6 +103,7 @@ export type ComplexEditSnapshot = {
 }
 
 export type ComplexReferenceSummaries = {
+  rows: ReferenceValueEntry[]
   conditionSummaries: ConditionSummaryRow[]
   floorSummaries: FloorSummaryRow[]
 }
@@ -132,7 +133,11 @@ export async function loadComplexReferenceSummaries(supabase: unknown, complexId
     .is('deleted_at', null)
     .limit(5000)
   if (error) throw error
-  return buildReferenceValueSummaries((data ?? []) as ReferenceValueEntry[])
+  const rows = (data ?? []) as ReferenceValueEntry[]
+  return {
+    rows,
+    ...buildReferenceValueSummaries(rows),
+  }
 }
 
 export async function loadComplexEditSnapshot(supabase: unknown, complexId: string): Promise<ComplexEditSnapshot> {

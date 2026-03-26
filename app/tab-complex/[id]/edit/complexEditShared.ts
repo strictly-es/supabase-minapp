@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { ConditionSummaryRow, FloorSummaryRow } from '@/lib/referenceValue'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 
 export type Pref = '' | '東京' | '神奈川' | '千葉' | '埼玉' | '大阪' | '兵庫'
 export type Access = '' | '徒歩' | 'バス' | '車・その他'
@@ -74,8 +74,8 @@ export type EvalChangeHandler = <K extends keyof EvalState>(
 ) => (e: ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>) => void
 
 export type ReferenceSummaryProps = {
-  conditionSummaries: ConditionSummaryRow[]
-  floorSummaries: FloorSummaryRow[]
+  referenceRows: ReferenceValueEntry[]
+  maxFloor: number | null
 }
 
 export const prefOptions: Pref[] = ['東京', '神奈川', '千葉', '埼玉', '大阪', '兵庫', '']

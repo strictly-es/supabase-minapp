@@ -29,6 +29,21 @@ export type FloorSummaryRow = {
   coef: number | null
 }
 
+export type ReferenceValueMatrixColumn = {
+  key: ConditionStatus
+  label: string
+}
+
+export type ReferenceValueMatrixCell = {
+  value: number | null
+  coef: number | null
+}
+
+export type ReferenceValueMatrixRow = {
+  floor: number
+  values: Record<ConditionStatus, ReferenceValueMatrixCell>
+}
+
 export const FLOOR_COEF_BASE_UNIT_PRICE = 200000
 
 export const CONDITION_STATUS_OPTIONS: { value: ConditionStatus; label: string }[] = [
@@ -39,6 +54,15 @@ export const CONDITION_STATUS_OPTIONS: { value: ConditionStatus; label: string }
   { value: 'OWNER_OCCUPIED', label: '売主居住中' },
   { value: 'NEEDS_RENOVATION', label: '改修必要' },
   { value: 'INVESTMENT_PROPERTY', label: '収益物件' },
+]
+
+export const REFERENCE_VALUE_MATRIX_COLUMNS: ReferenceValueMatrixColumn[] = [
+  { key: 'FULL_RENO_INSULATED', label: 'フルリノベ++断熱' },
+  { key: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベ' },
+  { key: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム' },
+  { key: 'PARTIAL_REFORM', label: '一部リフォーム' },
+  { key: 'OWNER_OCCUPIED', label: '居住中' },
+  { key: 'NEEDS_RENOVATION', label: '改修必要' },
 ]
 
 function calcDerivedUnitPrice(contractPrice: number | null, areaSqm: number | null): number | null {
@@ -98,4 +122,135 @@ export function buildReferenceValueSummaries(rows: ReferenceValueEntry[]): {
     })
 
   return { conditionSummaries, floorSummaries }
+}
+
+function roundReferenceValue(value: number): number {
+  return Math.round(value)
+}
+
+function calcReferenceCoef(value: number | null, base: number | null): number | null {
+  if (value == null || base == null || base === 0) return null
+  return Math.round((value / base) * 100) / 100
+}
+
+function buildConditionFloorMeanMap(rows: ReferenceValueEntry[]): Map<ConditionStatus, Map<number, number>> {
+  const grouped = new Map<ConditionStatus, Map<number, number[]>>()
+
+  for (const row of rows) {
+    const unitPrice = resolveReferenceUnitPrice(row)
+    if (unitPrice == null) continue
+    if (row.condition_status == null) continue
+    if (typeof row.floor !== 'number' || !Number.isFinite(row.floor)) continue
+
+    const floorMap = grouped.get(row.condition_status) ?? new Map<number, number[]>()
+    const values = floorMap.get(row.floor) ?? []
+    values.push(unitPrice)
+    floorMap.set(row.floor, values)
+    grouped.set(row.condition_status, floorMap)
+  }
+
+  return new Map(
+    [...grouped.entries()].map(([status, floorMap]) => [
+      status,
+      new Map(
+        [...floorMap.entries()].map(([floor, values]) => [
+          floor,
+          roundReferenceValue(values.reduce((sum, current) => sum + current, 0) / values.length),
+        ]),
+      ),
+    ]),
+  )
+}
+
+function buildConditionFloorMaxMap(rows: ReferenceValueEntry[]): Map<ConditionStatus, Map<number, number>> {
+  const grouped = new Map<ConditionStatus, Map<number, number[]>>()
+
+  for (const row of rows) {
+    const unitPrice = resolveReferenceUnitPrice(row)
+    if (unitPrice == null) continue
+    if (row.condition_status == null) continue
+    if (typeof row.floor !== 'number' || !Number.isFinite(row.floor)) continue
+
+    const floorMap = grouped.get(row.condition_status) ?? new Map<number, number[]>()
+    const values = floorMap.get(row.floor) ?? []
+    values.push(unitPrice)
+    floorMap.set(row.floor, values)
+    grouped.set(row.condition_status, floorMap)
+  }
+
+  return new Map(
+    [...grouped.entries()].map(([status, floorMap]) => [
+      status,
+      new Map(
+        [...floorMap.entries()].map(([floor, values]) => [
+          floor,
+          roundReferenceValue(Math.max(...values)),
+        ]),
+      ),
+    ]),
+  )
+}
+
+export function buildReferenceValueTables(params: {
+  rows: ReferenceValueEntry[]
+  maxFloor: number | null
+}): {
+  maxRows: ReferenceValueMatrixRow[]
+  meanRows: ReferenceValueMatrixRow[]
+} {
+  const { rows, maxFloor } = params
+  const floorSummaries = buildReferenceValueSummaries(rows).floorSummaries
+  const fallbackMaxFloor = floorSummaries.reduce((highest, row) => Math.max(highest, row.floor), 1)
+  const totalFloors = typeof maxFloor === 'number' && Number.isFinite(maxFloor) && maxFloor > 0
+    ? Math.floor(maxFloor)
+    : fallbackMaxFloor
+
+  const conditionFloorMaxMap = buildConditionFloorMaxMap(rows)
+  const conditionFloorMeanMap = buildConditionFloorMeanMap(rows)
+  const firstFloorMaxByCondition = new Map(
+    REFERENCE_VALUE_MATRIX_COLUMNS.map((column) => [
+      column.key,
+      conditionFloorMaxMap.get(column.key)?.get(1) ?? null,
+    ]),
+  )
+  const firstFloorMeanByCondition = new Map(
+    REFERENCE_VALUE_MATRIX_COLUMNS.map((column) => [
+      column.key,
+      conditionFloorMeanMap.get(column.key)?.get(1) ?? null,
+    ]),
+  )
+
+  const buildRows = (kind: 'max' | 'mean'): ReferenceValueMatrixRow[] => Array.from({ length: totalFloors }, (_, index) => {
+    const floor = index + 1
+    const values = Object.fromEntries(
+      CONDITION_STATUS_OPTIONS.map((option) => {
+        if (kind === 'max') {
+          const value = conditionFloorMaxMap.get(option.value)?.get(floor) ?? null
+          return [
+            option.value,
+            {
+              value,
+              coef: calcReferenceCoef(value, firstFloorMaxByCondition.get(option.value) ?? null),
+            },
+          ]
+        }
+
+        const value = conditionFloorMeanMap.get(option.value)?.get(floor) ?? null
+        return [
+          option.value,
+          {
+            value,
+            coef: calcReferenceCoef(value, firstFloorMeanByCondition.get(option.value) ?? null),
+          },
+        ]
+      }),
+    ) as Record<ConditionStatus, ReferenceValueMatrixCell>
+
+    return { floor, values }
+  })
+
+  return {
+    maxRows: buildRows('max'),
+    meanRows: buildRows('mean'),
+  }
 }

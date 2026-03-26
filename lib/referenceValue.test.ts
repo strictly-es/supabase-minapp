@@ -1,7 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildReferenceValueSummaries, resolveReferenceUnitPrice, type ReferenceValueEntry } from './referenceValue.ts'
+import {
+  buildReferenceValueTables,
+  buildReferenceValueSummaries,
+  resolveReferenceUnitPrice,
+  type ReferenceValueEntry,
+} from './referenceValue.ts'
 
 const baseRows: ReferenceValueEntry[] = [
   { floor: 1, area_sqm: 50, contract_price: 10000000, unit_price: 200000, condition_status: 'FULL_RENO_INSULATED' },
@@ -66,4 +71,136 @@ test('floor 1 stays in the floor summary with fixed coef 1 even when there are n
     { floor: 2, max: 180000, mean: 170000, coef: 0.85 },
     { floor: 1, max: null, mean: null, coef: 1 },
   ])
+})
+
+test('buildReferenceValueTables uses condition-specific max and mean values by floor', () => {
+  const { maxRows, meanRows } = buildReferenceValueTables({
+    rows: baseRows,
+    maxFloor: 6,
+  })
+
+  assert.deepEqual(maxRows.slice(0, 3), [
+    {
+      floor: 1,
+      values: {
+        FULL_RENO_INSULATED: { value: 220000, coef: 1 },
+        FULL_RENO_HIGH_DESIGN: { value: null, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: null, coef: null },
+        PARTIAL_REFORM: { value: null, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: null, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+    {
+      floor: 2,
+      values: {
+        FULL_RENO_INSULATED: { value: null, coef: null },
+        FULL_RENO_HIGH_DESIGN: { value: 180000, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: null, coef: null },
+        PARTIAL_REFORM: { value: 160000, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: null, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+    {
+      floor: 3,
+      values: {
+        FULL_RENO_INSULATED: { value: null, coef: null },
+        FULL_RENO_HIGH_DESIGN: { value: null, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: 150000, coef: null },
+        PARTIAL_REFORM: { value: null, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: 130000, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+  ])
+
+  assert.deepEqual(meanRows.slice(0, 3), [
+    {
+      floor: 1,
+      values: {
+        FULL_RENO_INSULATED: { value: 210000, coef: 1 },
+        FULL_RENO_HIGH_DESIGN: { value: null, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: null, coef: null },
+        PARTIAL_REFORM: { value: null, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: null, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+    {
+      floor: 2,
+      values: {
+        FULL_RENO_INSULATED: { value: null, coef: null },
+        FULL_RENO_HIGH_DESIGN: { value: 180000, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: null, coef: null },
+        PARTIAL_REFORM: { value: 160000, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: null, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+    {
+      floor: 3,
+      values: {
+        FULL_RENO_INSULATED: { value: null, coef: null },
+        FULL_RENO_HIGH_DESIGN: { value: null, coef: null },
+        FULL_REFORM_ALL_EQUIP: { value: 150000, coef: null },
+        PARTIAL_REFORM: { value: null, coef: null },
+        OWNER_OCCUPIED: { value: null, coef: null },
+        NEEDS_RENOVATION: { value: 130000, coef: null },
+        INVESTMENT_PROPERTY: { value: null, coef: null },
+      },
+    },
+  ])
+
+  assert.deepEqual(meanRows[5], {
+    floor: 6,
+    values: {
+      FULL_RENO_INSULATED: { value: null, coef: null },
+      FULL_RENO_HIGH_DESIGN: { value: null, coef: null },
+      FULL_REFORM_ALL_EQUIP: { value: null, coef: null },
+      PARTIAL_REFORM: { value: null, coef: null },
+      OWNER_OCCUPIED: { value: null, coef: null },
+      NEEDS_RENOVATION: { value: null, coef: null },
+      INVESTMENT_PROPERTY: { value: null, coef: null },
+    },
+  })
+})
+
+test('max coefficients use each condition`s first-floor max as the baseline', () => {
+  const { maxRows } = buildReferenceValueTables({
+    rows: [
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 100, condition_status: 'FULL_RENO_INSULATED' },
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 200, condition_status: 'FULL_RENO_INSULATED' },
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 300, condition_status: 'FULL_RENO_INSULATED' },
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 100, condition_status: 'FULL_RENO_HIGH_DESIGN' },
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 300, condition_status: 'FULL_RENO_HIGH_DESIGN' },
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 500, condition_status: 'FULL_RENO_HIGH_DESIGN' },
+      { floor: 2, area_sqm: null, contract_price: null, unit_price: 240, condition_status: 'FULL_RENO_INSULATED' },
+      { floor: 5, area_sqm: null, contract_price: null, unit_price: 186, condition_status: 'FULL_RENO_INSULATED' },
+    ],
+    maxFloor: 5,
+  })
+
+  assert.deepEqual(maxRows[0].values.FULL_RENO_INSULATED, { value: 300, coef: 1 })
+  assert.deepEqual(maxRows[0].values.FULL_RENO_HIGH_DESIGN, { value: 500, coef: 1 })
+  assert.deepEqual(maxRows[1].values.FULL_RENO_INSULATED, { value: 240, coef: 0.8 })
+  assert.deepEqual(maxRows[4].values.FULL_RENO_INSULATED, { value: 186, coef: 0.62 })
+})
+
+test('mean coefficients use each condition`s first-floor average as the baseline', () => {
+  const { meanRows } = buildReferenceValueTables({
+    rows: [
+      { floor: 1, area_sqm: null, contract_price: null, unit_price: 84410.92, condition_status: 'PARTIAL_REFORM' },
+      { floor: 5, area_sqm: null, contract_price: null, unit_price: 52667, condition_status: 'PARTIAL_REFORM' },
+    ],
+    maxFloor: 5,
+  })
+
+  assert.deepEqual(meanRows[0].values.PARTIAL_REFORM, { value: 84411, coef: 1 })
+  assert.deepEqual(meanRows[4].values.PARTIAL_REFORM, { value: 52667, coef: 0.62 })
 })
