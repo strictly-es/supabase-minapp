@@ -35,7 +35,7 @@ const STATUS_LABELS: Record<Exclude<ConditionStatus, null>, string> = {
   FULL_RENO_HIGH_DESIGN: 'フルリノベーション(デザイン性・快適性良好)',
   FULL_REFORM_ALL_EQUIP: 'フルリフォーム(設備全て交換)',
   PARTIAL_REFORM: '一部リフォーム',
-  OWNER_OCCUPIED: '売主居住中',
+  OWNER_OCCUPIED: '売主居住中（または居住可能な状態）',
   NEEDS_RENOVATION: '改修必要',
   INVESTMENT_PROPERTY: '収益物件',
 }
@@ -45,7 +45,7 @@ export const STATUS_OPTIONS: { value: Exclude<ConditionStatus, null>; label: str
   { value: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベーション(デザイン性・快適性良好)' },
   { value: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム(設備全て交換)' },
   { value: 'PARTIAL_REFORM', label: '一部リフォーム' },
-  { value: 'OWNER_OCCUPIED', label: '売主居住中' },
+  { value: 'OWNER_OCCUPIED', label: '売主居住中（または居住可能な状態）' },
   { value: 'NEEDS_RENOVATION', label: '改修必要' },
   { value: 'INVESTMENT_PROPERTY', label: '収益物件' },
 ]

@@ -13,3 +13,20 @@ export function calcBuiltAge(builtYm: string, now: Date = new Date()): number | 
 export function formatComplexUnitPrice(value: number | null): string {
   return formatUnitPrice(value)
 }
+
+export function parseMonthlyAmount(value: string): number | null {
+  if (!value.trim()) return null
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function calcComplexMonthlyCostTotal(values: Array<string | number | null | undefined>): number {
+  return values.reduce<number>((sum, value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? sum + value : sum
+    if (typeof value === 'string') {
+      const parsed = parseMonthlyAmount(value)
+      return parsed != null ? sum + parsed : sum
+    }
+    return sum
+  }, 0)
+}

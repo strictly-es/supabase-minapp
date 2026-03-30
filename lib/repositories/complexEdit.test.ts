@@ -77,7 +77,7 @@ test('loadComplexReferenceSummaries builds condition and floor summaries from en
   })
   assert.deepEqual(conditionSummaries.find((row) => row.key === 'OWNER_OCCUPIED'), {
     key: 'OWNER_OCCUPIED',
-    label: '売主居住中',
+    label: '売主居住中（または居住可能な状態）',
     max: 400000,
     mean: 400000,
   })
@@ -101,7 +101,17 @@ test('loadComplexEditSnapshot returns the latest complex and evaluation rows', a
                 calls.push({ table, method: 'eq', args: eqArgs })
                 return {
                   maybeSingle: async () => ({
-                    data: { id: 'complex-1', name: '団地A', unit_count: 120, station_minutes: 8 },
+                    data: {
+                      id: 'complex-1',
+                      name: '団地A',
+                      unit_count: 120,
+                      station_minutes: 8,
+                      mgmt_fee_monthly: 12000,
+                      repair_reserve_fee_monthly: 8000,
+                      other_fee_monthly: 1500,
+                      rent_case_availability: '有',
+                      rent_case_max_monthly_rent: 95000,
+                    },
                     error: null,
                   }),
                 }
@@ -147,7 +157,17 @@ test('loadComplexEditSnapshot returns the latest complex and evaluation rows', a
   }
 
   assert.deepEqual(await loadComplexEditSnapshot(supabase, 'complex-1'), {
-    complex: { id: 'complex-1', name: '団地A', unit_count: 120, station_minutes: 8 },
+    complex: {
+      id: 'complex-1',
+      name: '団地A',
+      unit_count: 120,
+      station_minutes: 8,
+      mgmt_fee_monthly: 12000,
+      repair_reserve_fee_monthly: 8000,
+      other_fee_monthly: 1500,
+      rent_case_availability: '有',
+      rent_case_max_monthly_rent: 95000,
+    },
     evaluation: { id: 'eval-1', factors: { market: { deals: { value: 'rich' } } }, note: '最新' },
   })
   assert.equal(calls.some((call) => call.table === 'complex_evaluations' && call.method === 'order'), true)

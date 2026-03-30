@@ -4,6 +4,7 @@ import type { ReferenceValueEntry } from '@/lib/referenceValue'
 export type Pref = '' | '東京' | '神奈川' | '千葉' | '埼玉' | '大阪' | '兵庫'
 export type Access = '' | '徒歩' | 'バス' | '車・その他'
 export type BuildingStructure = '' | 'SRC' | 'RC' | '鉄骨造' | '木造'
+export type RentCaseAvailability = '' | '有' | '無し'
 
 export type ComplexForm = {
   name: string
@@ -20,6 +21,11 @@ export type ComplexForm = {
   builder: string
   mgmtCompany: string
   mgmtType: '' | '自主管理' | '一部委託' | '全部委託'
+  mgmtFee: string
+  repairReserveFee: string
+  otherMonthlyFee: string
+  rentCaseAvailability: RentCaseAvailability
+  rentCaseMaxMonthlyRent: string
   buildingStructure: BuildingStructure
   floorCount: string
   sameAddressNewSeismicCase: string

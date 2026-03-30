@@ -5,10 +5,11 @@ import { prefOptions, type ComplexChangeHandler, type ComplexForm, type Pref } f
 type Props = {
   form: ComplexForm
   builtAge: number | null
+  totalMonthlyCost: number
   onComplexChange: ComplexChangeHandler
 }
 
-export function ComplexBasicsSection({ form, builtAge, onComplexChange }: Props) {
+export function ComplexBasicsSection({ form, builtAge, totalMonthlyCost, onComplexChange }: Props) {
   return (
     <>
       <section className="space-y-4">
@@ -84,6 +85,34 @@ export function ComplexBasicsSection({ form, builtAge, onComplexChange }: Props)
               <option value="全部委託">全部委託</option>
             </select>
           </label>
+          <label className="block">管理費（月額）
+            <input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）12000" value={form.mgmtFee} onChange={onComplexChange('mgmtFee')} />
+          </label>
+          <label className="block">修繕積立金（月額）
+            <input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）8000" value={form.repairReserveFee} onChange={onComplexChange('repairReserveFee')} />
+          </label>
+          <label className="block">その他（月額）
+            <input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）1500" value={form.otherMonthlyFee} onChange={onComplexChange('otherMonthlyFee')} />
+          </label>
+          <label className="block">計（月額・自動）
+            <input
+              type="text"
+              readOnly
+              className="mt-1 w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-600"
+              placeholder="自動計算"
+              value={totalMonthlyCost > 0 ? `${totalMonthlyCost.toLocaleString('ja-JP')} 円` : ''}
+            />
+          </label>
+          <label className="block">賃貸成約事例の有無
+            <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.rentCaseAvailability} onChange={onComplexChange('rentCaseAvailability')}>
+              <option value="">選択</option>
+              <option value="有">有</option>
+              <option value="無し">無し</option>
+            </select>
+          </label>
+          <label className="block">賃貸成約事例のMAX値：月額（ ）円
+            <input type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）95000" value={form.rentCaseMaxMonthlyRent} onChange={onComplexChange('rentCaseMaxMonthlyRent')} />
+          </label>
           <label className="block">建物構造
             <select className="mt-1 w-full border rounded-lg px-3 py-2" value={form.buildingStructure} onChange={onComplexChange('buildingStructure')}>
               <option value="">選択</option>
@@ -100,7 +129,7 @@ export function ComplexBasicsSection({ form, builtAge, onComplexChange }: Props)
       </section>
 
       <section className="space-y-4">
-        <h3 className="font-semibold">成約事例</h3>
+        <h3 className="font-semibold">本物件近隣の区分の成約事例</h3>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <label className="block">同住所の成約事例 - 新耐震の価格とm²単価
             <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例）2,480万円 / 38.1万円/m²" value={form.sameAddressNewSeismicCase} onChange={onComplexChange('sameAddressNewSeismicCase')} />

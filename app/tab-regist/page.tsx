@@ -69,7 +69,7 @@ const STATUS_OPTIONS: { value: Exclude<ConditionStatus, ''>; label: string }[] =
   { value: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベーション(デザイン性・快適性良好)' },
   { value: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム(設備全て交換)' },
   { value: 'PARTIAL_REFORM', label: '一部リフォーム' },
-  { value: 'OWNER_OCCUPIED', label: '売主居住中' },
+  { value: 'OWNER_OCCUPIED', label: '売主居住中（または居住可能な状態）' },
   { value: 'NEEDS_RENOVATION', label: '改修必要' },
   { value: 'INVESTMENT_PROPERTY', label: '収益物件' },
 ]

@@ -27,7 +27,7 @@ test('buildReferenceValueSummaries matches documented reference table expectatio
     { key: 'FULL_RENO_HIGH_DESIGN', label: 'フルリノベーション(デザイン性・快適性良好)', max: 180000, mean: 180000 },
     { key: 'FULL_REFORM_ALL_EQUIP', label: 'フルリフォーム(設備全て交換)', max: 150000, mean: 150000 },
     { key: 'PARTIAL_REFORM', label: '一部リフォーム', max: 160000, mean: 160000 },
-    { key: 'OWNER_OCCUPIED', label: '売主居住中', max: 140000, mean: 140000 },
+    { key: 'OWNER_OCCUPIED', label: '売主居住中（または居住可能な状態）', max: 140000, mean: 140000 },
     { key: 'NEEDS_RENOVATION', label: '改修必要', max: 130000, mean: 130000 },
     { key: 'INVESTMENT_PROPERTY', label: '収益物件', max: null, mean: null },
   ])

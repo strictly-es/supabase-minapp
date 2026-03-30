@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
-import { calcBuiltAge } from '@/lib/complexForm'
+import { calcBuiltAge, calcComplexMonthlyCostTotal, parseMonthlyAmount } from '@/lib/complexForm'
 import { insertComplexEvaluation, updateComplex } from '@/lib/repositories/complexes'
 import {
   countComplexContractsSince,
@@ -149,6 +149,11 @@ const initialComplex: ComplexForm = {
   builder: '',
   mgmtCompany: '',
   mgmtType: '',
+  mgmtFee: '',
+  repairReserveFee: '',
+  otherMonthlyFee: '',
+  rentCaseAvailability: '',
+  rentCaseMaxMonthlyRent: '',
   buildingStructure: '',
   floorCount: '',
   sameAddressNewSeismicCase: '',
@@ -290,6 +295,11 @@ export default function TabComplexEditPage() {
             builder: complex.builder ?? '',
             mgmtCompany: complex.mgmt_company ?? '',
             mgmtType: (complex.mgmt_type ?? '') as ComplexForm['mgmtType'],
+            mgmtFee: typeof complex['mgmt_fee_monthly'] === 'number' ? String(complex['mgmt_fee_monthly']) : '',
+            repairReserveFee: typeof complex['repair_reserve_fee_monthly'] === 'number' ? String(complex['repair_reserve_fee_monthly']) : '',
+            otherMonthlyFee: typeof complex['other_fee_monthly'] === 'number' ? String(complex['other_fee_monthly']) : '',
+            rentCaseAvailability: (complex.rent_case_availability ?? '') as ComplexForm['rentCaseAvailability'],
+            rentCaseMaxMonthlyRent: typeof complex.rent_case_max_monthly_rent === 'number' ? String(complex.rent_case_max_monthly_rent) : '',
             buildingStructure: (complex.building_structure ?? '') as ComplexForm['buildingStructure'],
             floorCount: typeof complex.floor_count === 'number' ? String(complex.floor_count) : '',
             sameAddressNewSeismicCase: complex.same_address_new_seismic_case ?? '',
@@ -343,6 +353,10 @@ export default function TabComplexEditPage() {
   }, [evalForm])
 
   const totalScore = useMemo(() => categoryTotals.market + categoryTotals.loc + categoryTotals.bld + categoryTotals.plus, [categoryTotals])
+  const totalMonthlyCost = useMemo(
+    () => calcComplexMonthlyCostTotal([form.mgmtFee, form.repairReserveFee, form.otherMonthlyFee]),
+    [form.mgmtFee, form.repairReserveFee, form.otherMonthlyFee],
+  )
 
   const marketDealsOptions = useMemo(() => {
     if (marketDealsAuto.value !== 'unregistered') return evalOptions.marketDeals
@@ -369,7 +383,6 @@ export default function TabComplexEditPage() {
       if (!user) { setMsg('ログインが必要です'); setSaving(false); return }
       if (!form.name.trim()) { setMsg('団地名は必須です'); setSaving(false); return }
 
-      const toInt = (v: string): number | null => v.trim() === '' ? null : Number.parseInt(v, 10)
       const complexPayload = {
         name: form.name.trim(),
         pref: form.pref || null,
@@ -380,14 +393,19 @@ export default function TabComplexEditPage() {
         built_age: builtAge,
         station_name: form.stationName.trim() || null,
         station_access_type: form.stationAccess || null,
-        station_minutes: toInt(form.stationMinutes),
+        station_minutes: parseMonthlyAmount(form.stationMinutes),
         seller: form.seller.trim() || null,
         builder: form.builder.trim() || null,
         mgmt_company: form.mgmtCompany.trim() || null,
         mgmt_type: form.mgmtType || null,
-        unit_count: toInt(form.unitCount),
+        mgmt_fee_monthly: parseMonthlyAmount(form.mgmtFee),
+        repair_reserve_fee_monthly: parseMonthlyAmount(form.repairReserveFee),
+        other_fee_monthly: parseMonthlyAmount(form.otherMonthlyFee),
+        rent_case_availability: form.rentCaseAvailability || null,
+        rent_case_max_monthly_rent: parseMonthlyAmount(form.rentCaseMaxMonthlyRent),
+        unit_count: parseMonthlyAmount(form.unitCount),
         building_structure: form.buildingStructure || null,
-        floor_count: toInt(form.floorCount),
+        floor_count: parseMonthlyAmount(form.floorCount),
         same_address_new_seismic_case: form.sameAddressNewSeismicCase.trim() || null,
         same_address_old_seismic_case: form.sameAddressOldSeismicCase.trim() || null,
         same_station_new_seismic_case: form.sameStationNewSeismicCase.trim() || null,
@@ -479,7 +497,7 @@ export default function TabComplexEditPage() {
             </div>
 
             <form className="space-y-6" onSubmit={(ev) => { handleSubmit(ev).catch(console.error) }}>
-              <ComplexBasicsSection form={form} builtAge={builtAge} onComplexChange={onComplexChange} />
+              <ComplexBasicsSection form={form} builtAge={builtAge} totalMonthlyCost={totalMonthlyCost} onComplexChange={onComplexChange} />
               <ComplexEvaluationSection
                 evalForm={evalForm}
                 evalOptions={evalOptions}

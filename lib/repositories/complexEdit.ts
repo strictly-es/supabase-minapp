@@ -75,6 +75,11 @@ type ComplexEditRow = {
   builder: string | null
   mgmt_company: string | null
   mgmt_type: string | null
+  mgmt_fee_monthly: number | null
+  repair_reserve_fee_monthly: number | null
+  other_fee_monthly: number | null
+  rent_case_availability: string | null
+  rent_case_max_monthly_rent: number | null
   map_url: string | null
   same_address_new_seismic_case: string | null
   same_address_old_seismic_case: string | null
@@ -148,7 +153,10 @@ export async function loadComplexEditSnapshot(supabase: unknown, complexId: stri
       id, name, pref, city, town, built_ym,
       station_name, station_access_type, station_minutes,
       unit_count, building_structure, floor_count,
-      seller, builder, mgmt_company, mgmt_type, map_url,
+      seller, builder, mgmt_company, mgmt_type,
+      mgmt_fee_monthly, repair_reserve_fee_monthly, other_fee_monthly,
+      rent_case_availability, rent_case_max_monthly_rent,
+      map_url,
       same_address_new_seismic_case, same_address_old_seismic_case,
       same_station_new_seismic_case, same_station_old_seismic_case
     `)
