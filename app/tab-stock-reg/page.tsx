@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from '
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toIntOrNull } from '@/lib/entryMath'
+import { loadComplexReferenceSummaries } from '@/lib/repositories/complexEdit'
 import { buildFloorRows, calcBaseUnitPrice, safeNumber } from '@/lib/stockPricing'
 import {
   insertStock,
@@ -17,6 +18,7 @@ import { useClientSearchParams } from '@/lib/useClientSearchParams'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 import StockForm from '../tab-stock/StockForm'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 import type { StockComplexOption as Complex, StockEntryOption as Entry, StockFormState as FormState } from '../tab-stock/stockFormShared'
 
 const initialForm: FormState = {
@@ -50,6 +52,7 @@ export default function StockRegPage() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [requestedEntryHandled, setRequestedEntryHandled] = useState(false)
+  const [referenceRows, setReferenceRows] = useState<ReferenceValueEntry[]>([])
 
   useEffect(() => {
     if (!requestedEntryId || requestedEntryHandled) return
@@ -127,6 +130,25 @@ export default function StockRegPage() {
     loadEntries()
     return () => { mounted = false }
   }, [requestedEntryId, selectedComplexId, selectedEntryId, supabase])
+
+  useEffect(() => {
+    if (!selectedComplexId) {
+      setReferenceRows([])
+      return
+    }
+    let mounted = true
+    async function loadReferenceRows() {
+      try {
+        const { rows } = await loadComplexReferenceSummaries(supabase, selectedComplexId)
+        if (mounted) setReferenceRows(rows)
+      } catch (e) {
+        console.error(e)
+        if (mounted) setReferenceRows([])
+      }
+    }
+    loadReferenceRows()
+    return () => { mounted = false }
+  }, [selectedComplexId, supabase])
 
   // 当該成約を選択したら、面積/間取り/係数/㎡単価を初期セット
   useEffect(() => {
@@ -248,6 +270,7 @@ export default function StockRegPage() {
                   form={form}
                   floors={floors}
                   selectedFloorNum={selectedFloorNum}
+                  referenceRows={referenceRows}
                   saving={saving}
                   submitLabel="保存"
                   onComplexChange={(value) => { setSelectedComplexId(value); setSelectedEntryId('') }}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from '
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toDateInputValue, toIntOrNull } from '@/lib/entryMath'
+import { loadComplexReferenceSummaries } from '@/lib/repositories/complexEdit'
 import {
   buildFloorRows,
   calcBaseUnitPrice,
@@ -23,6 +24,7 @@ import { getSupabase } from '@/lib/supabaseClient'
 import RequireAuth from '@/components/RequireAuth'
 import UserEmail from '@/components/UserEmail'
 import StockForm from '@/app/tab-stock/StockForm'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 import type { StockComplexOption as Complex, StockEntryOption as Entry, StockFormState as FormState } from '@/app/tab-stock/stockFormShared'
 
 const initialForm: FormState = {
@@ -58,6 +60,7 @@ export default function StockEditPage() {
   const [loadingStock, setLoadingStock] = useState(true)
   const [existingPdfPath, setExistingPdfPath] = useState<string | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
+  const [referenceRows, setReferenceRows] = useState<ReferenceValueEntry[]>([])
 
   const selectedComplex = useMemo(() => complexes.find((c) => c.id === selectedComplexId) ?? null, [complexes, selectedComplexId])
   const selectedEntry = useMemo(() => entries.find((e) => e.id === selectedEntryId) ?? null, [entries, selectedEntryId])
@@ -149,6 +152,25 @@ export default function StockEditPage() {
     loadEntries()
     return () => { mounted = false }
   }, [supabase, selectedComplexId, selectedEntryId])
+
+  useEffect(() => {
+    if (!selectedComplexId) {
+      setReferenceRows([])
+      return
+    }
+    let mounted = true
+    async function loadReferenceRows() {
+      try {
+        const { rows } = await loadComplexReferenceSummaries(supabase, selectedComplexId)
+        if (mounted) setReferenceRows(rows)
+      } catch (e) {
+        console.error(e)
+        if (mounted) setReferenceRows([])
+      }
+    }
+    loadReferenceRows()
+    return () => { mounted = false }
+  }, [selectedComplexId, supabase])
 
   useEffect(() => {
     if (!selectedEntry) return
@@ -285,6 +307,7 @@ export default function StockEditPage() {
                       form={form}
                       floors={floors}
                       selectedFloorNum={selectedFloorNum}
+                      referenceRows={referenceRows}
                       saving={saving}
                       submitLabel="更新"
                       showContractDate

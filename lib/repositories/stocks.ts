@@ -85,6 +85,7 @@ type StockComplexRow = {
   pref: string | null
   city: string | null
   floor_coef_pattern?: string | null
+  floor_count?: number | null
 }
 
 type StockEntryRaw = {
@@ -144,6 +145,7 @@ export type StockComplexOption = {
   pref: string | null
   city: string | null
   floorPattern: string | null
+  floorCount: number | null
 }
 
 export type StockRegEntryOption = {
@@ -176,6 +178,7 @@ function mapComplexRow(row: StockComplexRow): StockComplexOption {
     pref: row.pref ?? null,
     city: row.city ?? null,
     floorPattern: row.floor_coef_pattern ?? null,
+    floorCount: row.floor_count ?? null,
   }
 }
 
@@ -199,7 +202,7 @@ export async function listStockComplexes(supabase: unknown): Promise<StockComple
   const client = asStocksRepositoryClient(supabase)
   const { data, error } = await client
     .from('housing_complexes')
-    .select('id, name, pref, city, floor_coef_pattern')
+    .select('id, name, pref, city, floor_coef_pattern, floor_count')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
   if (error) throw error

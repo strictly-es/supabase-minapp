@@ -30,7 +30,7 @@ test('listStockComplexes maps complex rows for stock screens', async () => {
                 order: async (...orderArgs: unknown[]) => {
                   calls.push({ method: 'order', args: orderArgs })
                   return {
-                    data: [{ id: 'c1', name: null, pref: '大阪府', city: '大阪市', floor_coef_pattern: '②中間' }],
+                    data: [{ id: 'c1', name: null, pref: '大阪府', city: '大阪市', floor_coef_pattern: '②中間', floor_count: 5 }],
                     error: null,
                   }
                 },
@@ -48,6 +48,7 @@ test('listStockComplexes maps complex rows for stock screens', async () => {
     pref: '大阪府',
     city: '大阪市',
     floorPattern: '②中間',
+    floorCount: 5,
   }])
   assert.equal(calls.some((call) => call.method === 'is' && call.args[0] === 'deleted_at'), true)
 })

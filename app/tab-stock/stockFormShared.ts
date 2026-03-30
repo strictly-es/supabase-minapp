@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react'
 import type { FloorRow } from '@/lib/stockPricing'
+import type { ReferenceValueEntry } from '@/lib/referenceValue'
 
 export type StockComplexOption = {
   id: string
@@ -7,6 +8,7 @@ export type StockComplexOption = {
   pref: string | null
   city: string | null
   floorPattern: string | null
+  floorCount?: number | null
 }
 
 export type StockEntryOption = {
@@ -51,6 +53,7 @@ export type StockFormProps = {
   form: StockFormState
   floors: FloorRow[]
   selectedFloorNum: number | null
+  referenceRows: ReferenceValueEntry[]
   saving: boolean
   submitLabel: string
   resetLabel?: string

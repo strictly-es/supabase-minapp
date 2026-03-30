@@ -1,5 +1,6 @@
 'use client'
 
+import { ComplexReferenceSummaries } from '@/app/tab-complex/[id]/edit/ComplexReferenceSummaries'
 import { formatUnit, formatYen } from '@/lib/stockPricing'
 import type { StockFormProps } from './stockFormShared'
 
@@ -21,6 +22,7 @@ export default function StockForm({
   form,
   floors,
   selectedFloorNum,
+  referenceRows,
   saving,
   submitLabel,
   resetLabel = 'リセット',
@@ -118,13 +120,6 @@ export default function StockForm({
                 </div>
               </div>
             )}
-            <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
-              <div className="text-gray-500 text-xs">階数効用 参考</div>
-              <div className="text-xs text-gray-600">①保守的: 1F 1.00 / 2F 0.98 / 3F 0.95 / 4F 0.90 / 5F 0.85</div>
-              <div className="text-xs text-gray-600">②中間: 1.00 / 0.99 / 0.96 / 0.92 / 0.88</div>
-              <div className="text-xs text-gray-600">③攻め: 1.00 / 1.00 / 0.99 / 0.98 / 0.97</div>
-              <div className="text-xs text-gray-600">④超攻め: 0.98 / 0.99 / 1.00 / 1.03 / 1.07</div>
-            </div>
           </div>
         </div>
         <div className="overflow-auto rounded-xl border border-gray-200 bg-gray-50">
@@ -151,6 +146,10 @@ export default function StockForm({
             </tbody>
           </table>
         </div>
+        <ComplexReferenceSummaries
+          referenceRows={referenceRows}
+          maxFloor={selectedComplex?.floorCount ?? null}
+        />
       </section>
 
       <div className="flex items-center justify-end gap-2">
