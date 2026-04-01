@@ -55,9 +55,9 @@ test('loadComplexReferenceSummaries builds condition and floor summaries from en
             is: () => ({
               limit: async () => ({
                 data: [
-                  { condition_status: 'FULL_RENO_INSULATED', floor: 4, unit_price: 550000, contract_price: null, area_sqm: null },
-                  { condition_status: 'FULL_RENO_INSULATED', floor: 2, unit_price: 450000, contract_price: null, area_sqm: null },
-                  { condition_status: 'OWNER_OCCUPIED', floor: 1, unit_price: null, contract_price: 18000000, area_sqm: 45 },
+                  { condition_status: 'FULL_RENO_INSULATED', floor: 4, unit_price: 550000, contract_price: null, area_sqm: null, contract_date: '2024-04-01' },
+                  { condition_status: 'FULL_RENO_INSULATED', floor: 2, unit_price: 450000, contract_price: null, area_sqm: null, contract_date: '2023-04-01' },
+                  { condition_status: 'OWNER_OCCUPIED', floor: 1, unit_price: null, contract_price: 18000000, area_sqm: 45, contract_date: '2022-04-01' },
                 ],
                 error: null,
               }),

@@ -13,6 +13,7 @@ export type ReferenceValueEntry = {
   unit_price: number | null
   contract_price: number | null
   area_sqm: number | null
+  contract_date?: string | null
 }
 
 export type ConditionSummaryRow = {
@@ -42,6 +43,12 @@ export type ReferenceValueMatrixCell = {
 export type ReferenceValueMatrixRow = {
   floor: number
   values: Record<ConditionStatus, ReferenceValueMatrixCell>
+}
+
+export type YearlyReferenceSummaryRow = {
+  year: number
+  meanUnitPrice: number
+  contractCount: number
 }
 
 export const FLOOR_COEF_BASE_UNIT_PRICE = 200000
@@ -253,4 +260,82 @@ export function buildReferenceValueTables(params: {
     maxRows: buildRows('max'),
     meanRows: buildRows('mean'),
   }
+}
+
+export function resolveMeanReferenceCoef(params: {
+  rows: ReferenceValueEntry[]
+  maxFloor: number | null
+  floor: number | null
+  condition?: ConditionStatus
+}): number | null {
+  const { rows, maxFloor, floor, condition = 'FULL_REFORM_ALL_EQUIP' } = params
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0) return null
+
+  const { meanRows } = buildReferenceValueTables({ rows, maxFloor })
+  return meanRows.find((row) => row.floor === floor)?.values[condition].coef ?? null
+}
+
+export function resolveMaxReferenceValue(params: {
+  rows: ReferenceValueEntry[]
+  maxFloor: number | null
+  floor: number | null
+  condition?: ConditionStatus
+}): number | null {
+  const { rows, maxFloor, floor, condition = 'FULL_REFORM_ALL_EQUIP' } = params
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0) return null
+
+  const { maxRows } = buildReferenceValueTables({ rows, maxFloor })
+  return maxRows.find((row) => row.floor === floor)?.values[condition].value ?? null
+}
+
+function extractContractYear(value: string | null | undefined): number | null {
+  if (!value) return null
+  const yearText = value.slice(0, 4)
+  const year = Number.parseInt(yearText, 10)
+  return Number.isFinite(year) ? year : null
+}
+
+export function buildYearlyReferenceSummaries(rows: ReferenceValueEntry[]): YearlyReferenceSummaryRow[] {
+  const grouped = new Map<number, number[]>()
+
+  for (const row of rows) {
+    const year = extractContractYear(row.contract_date)
+    const unitPrice = resolveReferenceUnitPrice(row)
+    if (year == null || unitPrice == null) continue
+
+    const values = grouped.get(year) ?? []
+    values.push(unitPrice)
+    grouped.set(year, values)
+  }
+
+  return [...grouped.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([year, values]) => ({
+      year,
+      meanUnitPrice: Math.round(values.reduce((sum, current) => sum + current, 0) / values.length),
+      contractCount: values.length,
+    }))
+}
+
+export function resolveYearGrowthCoef(params: {
+  rows: ReferenceValueEntry[]
+  baseContractDate: string | null | undefined
+}): number | null {
+  const { rows, baseContractDate } = params
+  const baseYear = extractContractYear(baseContractDate)
+  if (baseYear == null) return null
+
+  const yearlyRows = buildYearlyReferenceSummaries(rows)
+  if (yearlyRows.length < 2) return null
+
+  const oldest = yearlyRows[0]
+  const latest = yearlyRows[yearlyRows.length - 1]
+  const elapsedYears = latest.year - oldest.year
+  if (elapsedYears <= 0 || oldest.meanUnitPrice <= 0) return null
+
+  const yearsFromBase = latest.year - baseYear
+  if (yearsFromBase <= 0) return 0
+
+  const annualGrowth = Math.round(((latest.meanUnitPrice / oldest.meanUnitPrice) / elapsedYears) * 100) / 100
+  return Math.round(annualGrowth * yearsFromBase * 100) / 100
 }

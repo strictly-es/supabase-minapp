@@ -82,6 +82,7 @@ export type EvalChangeHandler = <K extends keyof EvalState>(
 export type ReferenceSummaryProps = {
   referenceRows: ReferenceValueEntry[]
   maxFloor: number | null
+  hideMaxCoefColumns?: boolean
 }
 
 export const prefOptions: Pref[] = ['東京', '神奈川', '千葉', '埼玉', '大阪', '兵庫', '']

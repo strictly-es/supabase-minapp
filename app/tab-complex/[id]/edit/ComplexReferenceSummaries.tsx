@@ -14,13 +14,13 @@ function formatCoef(value: number | null): string {
   return value.toLocaleString('ja-JP', { minimumFractionDigits: value === 1 ? 0 : 2, maximumFractionDigits: 2 })
 }
 
-export function ComplexReferenceSummaries({ referenceRows, maxFloor }: ReferenceSummaryProps) {
+export function ComplexReferenceSummaries({ referenceRows, maxFloor, hideMaxCoefColumns = false }: ReferenceSummaryProps) {
   const { maxRows, meanRows } = buildReferenceValueTables({
     rows: referenceRows,
     maxFloor,
   })
 
-  const renderTable = (title: string, rows: typeof maxRows) => (
+  const renderTable = (title: string, rows: typeof maxRows, hideCoefColumns = false) => (
     <div className="space-y-2">
       <div className="text-sm font-medium text-gray-700">{title}</div>
       <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -31,7 +31,7 @@ export function ComplexReferenceSummaries({ referenceRows, maxFloor }: Reference
               {REFERENCE_VALUE_MATRIX_COLUMNS.map((column) => (
                 <Fragment key={column.key}>
                   <th className="px-3 py-2 text-right whitespace-nowrap">{column.label}</th>
-                  <th className="px-3 py-2 text-right whitespace-nowrap">係数</th>
+                  {!hideCoefColumns && <th className="px-3 py-2 text-right whitespace-nowrap">係数</th>}
                 </Fragment>
               ))}
             </tr>
@@ -45,9 +45,11 @@ export function ComplexReferenceSummaries({ referenceRows, maxFloor }: Reference
                     <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                       {formatComplexUnitPrice(row.values[column.key].value)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                      {formatCoef(row.values[column.key].coef)}
-                    </td>
+                    {!hideCoefColumns && (
+                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                        {formatCoef(row.values[column.key].coef)}
+                      </td>
+                    )}
                   </Fragment>
                 ))}
               </tr>
@@ -69,7 +71,7 @@ export function ComplexReferenceSummaries({ referenceRows, maxFloor }: Reference
         </div>
       </div>
       <div className="grid gap-4">
-        {renderTable('MAX値', maxRows)}
+        {renderTable('MAX値', maxRows, hideMaxCoefColumns)}
         {renderTable('平均値', meanRows)}
       </div>
     </section>

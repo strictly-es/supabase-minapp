@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from '
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toIntOrNull } from '@/lib/entryMath'
+import { resolveMaxReferenceValue, resolveMeanReferenceCoef, resolveYearGrowthCoef } from '@/lib/referenceValue'
 import { loadComplexReferenceSummaries } from '@/lib/repositories/complexEdit'
 import { buildFloorRows, calcBaseUnitPrice, safeNumber } from '@/lib/stockPricing'
 import {
@@ -27,6 +28,7 @@ const initialForm: FormState = {
   layout: '',
   registered: '',
   maxUnit: '',
+  yearCoef: '',
   coefTotal: '1.00',
 }
 
@@ -175,6 +177,41 @@ export default function StockRegPage() {
     return Number.isFinite(n) ? n : null
   }, [form.floor])
   const selectedFloorRow = floors.find((f) => f.floor === selectedFloorNum) ?? floors[0]
+
+  useEffect(() => {
+    if (selectedFloorNum == null) return
+    const nextMaxUnit = resolveMaxReferenceValue({
+      rows: referenceRows,
+      maxFloor: selectedComplex?.floorCount ?? null,
+      floor: selectedFloorNum,
+    })
+    const nextCoef = resolveMeanReferenceCoef({
+      rows: referenceRows,
+      maxFloor: selectedComplex?.floorCount ?? null,
+      floor: selectedFloorNum,
+    })
+    setForm((prev) => {
+      const nextCoefValue = (nextCoef ?? 1).toFixed(2)
+      const nextMaxUnitValue = nextMaxUnit != null ? String(nextMaxUnit) : prev.maxUnit
+      if (prev.coefTotal === nextCoefValue && prev.maxUnit === nextMaxUnitValue) return prev
+      return {
+        ...prev,
+        maxUnit: nextMaxUnitValue,
+        coefTotal: nextCoefValue,
+      }
+    })
+  }, [referenceRows, selectedComplex?.floorCount, selectedFloorNum])
+
+  useEffect(() => {
+    const nextYearCoef = resolveYearGrowthCoef({
+      rows: referenceRows,
+      baseContractDate: selectedEntry?.contract ?? selectedEntry?.reins ?? null,
+    })
+    setForm((prev) => {
+      const nextValue = nextYearCoef == null ? '' : nextYearCoef.toFixed(2)
+      return prev.yearCoef === nextValue ? prev : { ...prev, yearCoef: nextValue }
+    })
+  }, [referenceRows, selectedEntry?.contract, selectedEntry?.reins])
 
   const onFormChange = <K extends keyof FormState>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))

@@ -1,6 +1,7 @@
 'use client'
 
 import { ComplexReferenceSummaries } from '@/app/tab-complex/[id]/edit/ComplexReferenceSummaries'
+import { buildYearlyReferenceSummaries } from '@/lib/referenceValue'
 import { formatUnit, formatYen } from '@/lib/stockPricing'
 import type { StockFormProps } from './stockFormShared'
 
@@ -27,6 +28,7 @@ export default function StockForm({
   submitLabel,
   resetLabel = 'リセット',
   showContractDate = false,
+  showOnlySelectedFloorRow = false,
   existingPdf,
   onComplexChange,
   onEntryChange,
@@ -34,6 +36,11 @@ export default function StockForm({
   onPdfChange,
   onReset,
 }: StockFormProps) {
+  const floorRowsToDisplay = showOnlySelectedFloorRow && selectedFloorNum != null
+    ? floors.filter((floor) => floor.floor === selectedFloorNum)
+    : floors
+  const yearlyReferenceRows = buildYearlyReferenceSummaries(referenceRows)
+
   return (
     <>
       <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -101,10 +108,19 @@ export default function StockForm({
           <label className="block">MAX成約単価（円/㎡）
             <input name="max_unit" type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="350000" value={form.maxUnit} onChange={onFormChange('maxUnit')} />
           </label>
-          <label className="block">係数（内装 + 年数）
+          <label className="block">在庫物件の設定単価 (MAX成約単価×階層係数)
             <input name="coef_total" type="number" min="0" step="0.01" value={form.coefTotal} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('coefTotal')} />
           </label>
-          <div className="md:col-span-2 space-y-2">
+          <label className="block">年数係数(1年間の伸び率の平均×年数)
+            <input name="year_coef" type="number" min="0" step="0.01" value={form.yearCoef} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('yearCoef')} />
+          </label>
+          <div className="space-y-2">
+            <div className="block">＝ 係数合計</div>
+            <div className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 num">
+              {form.coefTotal || '—'}
+            </div>
+          </div>
+          <div className="md:col-span-4 space-y-2">
             {selectedEntry && (selectedEntry.interiorCoef != null || selectedEntry.yearCoef != null) && (
               <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
                 <div className="text-gray-500 text-xs">過去MAXの係数（内装 / 年数）</div>
@@ -134,7 +150,7 @@ export default function StockForm({
               </tr>
             </thead>
             <tbody>
-              {floors.map((floor) => (
+              {floorRowsToDisplay.map((floor) => (
                 <tr className={`border-t ${selectedFloorNum === floor.floor ? 'bg-amber-50' : ''}`} key={floor.floor}>
                   <td className="py-2 px-2">{floor.floor}F</td>
                   <td className="py-2 px-2 text-right num">{floor.targetUnit ? formatUnit(floor.targetUnit) : '—'}</td>
@@ -146,9 +162,35 @@ export default function StockForm({
             </tbody>
           </table>
         </div>
+        <div className="overflow-auto rounded-xl border border-gray-200 bg-gray-50">
+          <table className="w-full text-xs">
+            <thead className="text-gray-600 bg-gray-100">
+              <tr>
+                <th className="text-left py-2 px-2">年度</th>
+                <th className="text-right py-2 px-2">平均㎡単価</th>
+                <th className="text-right py-2 px-2">成約件数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {yearlyReferenceRows.map((row) => (
+                <tr className="border-t" key={row.year}>
+                  <td className="py-2 px-2 num">{row.year}</td>
+                  <td className="py-2 px-2 text-right num">{row.meanUnitPrice.toLocaleString('ja-JP')}</td>
+                  <td className="py-2 px-2 text-right num">{row.contractCount.toLocaleString('ja-JP')}件</td>
+                </tr>
+              ))}
+              {yearlyReferenceRows.length === 0 && (
+                <tr className="border-t">
+                  <td className="py-2 px-2 text-gray-500" colSpan={3}>年度別の過去成約データはありません</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
         <ComplexReferenceSummaries
           referenceRows={referenceRows}
           maxFloor={selectedComplex?.floorCount ?? null}
+          hideMaxCoefColumns
         />
       </section>
 

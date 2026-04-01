@@ -2,8 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildYearlyReferenceSummaries,
   buildReferenceValueTables,
   buildReferenceValueSummaries,
+  resolveMaxReferenceValue,
+  resolveMeanReferenceCoef,
+  resolveYearGrowthCoef,
   resolveReferenceUnitPrice,
   type ReferenceValueEntry,
 } from './referenceValue.ts'
@@ -203,4 +207,55 @@ test('mean coefficients use each condition`s first-floor average as the baseline
 
   assert.deepEqual(meanRows[0].values.PARTIAL_REFORM, { value: 84411, coef: 1 })
   assert.deepEqual(meanRows[4].values.PARTIAL_REFORM, { value: 52667, coef: 0.62 })
+})
+
+test('resolveMeanReferenceCoef returns the full-reform mean coefficient for the requested floor', () => {
+  const rows: ReferenceValueEntry[] = [
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 200000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 220000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 150000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+  ]
+
+  assert.equal(resolveMeanReferenceCoef({ rows, maxFloor: 5, floor: 3 }), 0.71)
+  assert.equal(resolveMeanReferenceCoef({ rows, maxFloor: 5, floor: 2 }), null)
+  assert.equal(resolveMeanReferenceCoef({ rows, maxFloor: 5, floor: null }), null)
+})
+
+test('resolveMaxReferenceValue returns the full-reform max value for the requested floor', () => {
+  const rows: ReferenceValueEntry[] = [
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 200000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 220000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 150000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 170000, condition_status: 'FULL_REFORM_ALL_EQUIP' },
+  ]
+
+  assert.equal(resolveMaxReferenceValue({ rows, maxFloor: 5, floor: 3 }), 170000)
+  assert.equal(resolveMaxReferenceValue({ rows, maxFloor: 5, floor: 2 }), null)
+  assert.equal(resolveMaxReferenceValue({ rows, maxFloor: 5, floor: null }), null)
+})
+
+test('buildYearlyReferenceSummaries groups by contract year with average unit price and count', () => {
+  const rows: ReferenceValueEntry[] = [
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 150000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-02-01' },
+    { floor: 2, area_sqm: null, contract_price: null, unit_price: 160000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-06-15' },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 158000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2010-03-20' },
+    { floor: 4, area_sqm: 50, contract_price: 7700000, unit_price: null, condition_status: 'OWNER_OCCUPIED', contract_date: '2010-04-01' },
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 140000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: null },
+  ]
+
+  assert.deepEqual(buildYearlyReferenceSummaries(rows), [
+    { year: 2009, meanUnitPrice: 155000, contractCount: 2 },
+    { year: 2010, meanUnitPrice: 156000, contractCount: 2 },
+  ])
+})
+
+test('resolveYearGrowthCoef multiplies annualized growth by elapsed years from the base contract year', () => {
+  const rows: ReferenceValueEntry[] = [
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 120000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-01-01' },
+    { floor: 2, area_sqm: null, contract_price: null, unit_price: 200000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2025-01-01' },
+  ]
+
+  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: '2018-06-01' }), 0.7)
+  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: '2025-01-01' }), 0)
+  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: null }), null)
 })

@@ -31,6 +31,7 @@ export type StockFormState = {
   registered: string
   contract?: string
   maxUnit: string
+  yearCoef: string
   coefTotal: string
 }
 
@@ -58,6 +59,7 @@ export type StockFormProps = {
   submitLabel: string
   resetLabel?: string
   showContractDate?: boolean
+  showOnlySelectedFloorRow?: boolean
   existingPdf?: ExistingPdfLink | null
   onComplexChange: (complexId: string) => void
   onEntryChange: (entryId: string) => void
