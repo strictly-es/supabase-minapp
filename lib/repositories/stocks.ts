@@ -94,6 +94,7 @@ type StockEntryRaw = {
   floor: number | null
   area_sqm: number | null
   layout: string | null
+  unit_price?: number | null
   max_price: number | null
   coef_total: number | null
   interior_level_coef: number | null
@@ -135,6 +136,7 @@ export type StockEditRow = {
   registered_date: string | null
   contract_date: string | null
   base_unit_price: number | null
+  entry_unit_price?: number | null
   coef_total: number | null
   stock_mysoku_path: string | null
 }
@@ -154,6 +156,7 @@ export type StockRegEntryOption = {
   floor: number | null
   area: number | null
   layout: string | null
+  unitPrice: number | null
   maxPrice: number | null
   coefTotal: number | null
   interiorCoef: number | null
@@ -189,6 +192,7 @@ function mapEntryRow(row: StockEntryRaw): StockRegEntryOption {
     floor: row.floor ?? null,
     area: row.area_sqm ?? null,
     layout: row.layout ?? null,
+    unitPrice: row.unit_price ?? null,
     maxPrice: row.max_price ?? null,
     coefTotal: row.coef_total ?? (safeNumber(row.interior_level_coef) + safeNumber(row.contract_year_coef)),
     interiorCoef: row.interior_level_coef ?? null,
@@ -237,7 +241,7 @@ export async function listMaxEntriesForComplex(supabase: unknown, complexId: str
   const client = asStocksRepositoryClient(supabase)
   const { data, error } = await client
     .from('estate_entries')
-    .select('id, floor, area_sqm, layout, max_price, coef_total, interior_level_coef, contract_year_coef, reins_registered_date, contract_date, contract_kind')
+    .select('id, floor, area_sqm, layout, unit_price, max_price, coef_total, interior_level_coef, contract_year_coef, reins_registered_date, contract_date, contract_kind')
     .eq('complex_id', complexId)
     .eq('contract_kind', 'MAX')
     .is('deleted_at', null)
@@ -250,7 +254,7 @@ export async function listMaxEntriesForComplex(supabase: unknown, complexId: str
 export async function loadStockEntryContext(supabase: unknown, entryId: string): Promise<StockEntryContext | null> {
   const client = asStocksRepositoryClient(supabase)
   const { data, error } = await (client.from('estate_entries') as EstateEntriesMaybeSingleSelect)
-    .select('id, complex_id, floor, area_sqm, layout, max_price, coef_total, interior_level_coef, contract_year_coef, reins_registered_date, contract_date, contract_kind')
+    .select('id, complex_id, floor, area_sqm, layout, unit_price, max_price, coef_total, interior_level_coef, contract_year_coef, reins_registered_date, contract_date, contract_kind')
     .eq('id', entryId)
     .maybeSingle()
   if (error) throw error
@@ -294,11 +298,21 @@ export async function loadStockDetail(supabase: unknown, stockId: string): Promi
 export async function loadStockEdit(supabase: unknown, stockId: string): Promise<StockEditRow | null> {
   const client = asStocksRepositoryClient(supabase)
   const { data, error } = await (client.from('estate_stocks') as EstateStocksMaybeSingleSelect)
-    .select('id, complex_id, estate_entry_id, floor, area_sqm, layout, registered_date, contract_date, base_unit_price, coef_total, stock_mysoku_path')
+    .select('id, complex_id, estate_entry_id, floor, area_sqm, layout, registered_date, contract_date, base_unit_price, coef_total, stock_mysoku_path, estate_entries ( unit_price )')
     .eq('id', stockId)
     .maybeSingle()
   if (error) throw error
-  return (data ?? null) as StockEditRow | null
+  if (!data) return null
+
+  const row = data as Record<string, unknown> & {
+    estate_entries?: { unit_price?: number | null } | null
+  }
+  const { estate_entries, ...rest } = row
+
+  return {
+    ...(rest as StockEditRow),
+    entry_unit_price: estate_entries?.unit_price ?? null,
+  }
 }
 
 export async function createStockPdfSignedUrl(supabase: unknown, path: string): Promise<string> {

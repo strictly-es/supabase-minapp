@@ -96,6 +96,7 @@ test('stock repository read helpers keep list and MAX-entry query shapes stable'
                           floor: 5,
                           area_sqm: 72.5,
                           layout: '3LDK',
+                          unit_price: 257942.29,
                           max_price: 31000000,
                           coef_total: null,
                           interior_level_coef: 0.2,
@@ -123,6 +124,7 @@ test('stock repository read helpers keep list and MAX-entry query shapes stable'
     floor: 5,
     area: 72.5,
     layout: '3LDK',
+    unitPrice: 257942.29,
     maxPrice: 31000000,
     coefTotal: 0.35,
     interiorCoef: 0.2,
@@ -148,6 +150,7 @@ test('loadStockEntryContext returns entry context for stock registration routing
                   floor: 4,
                   area_sqm: 68.2,
                   layout: '3LDK',
+                  unit_price: 257942.29,
                   max_price: 29800000,
                   coef_total: 1.15,
                   interior_level_coef: 1.05,
@@ -171,6 +174,7 @@ test('loadStockEntryContext returns entry context for stock registration routing
     floor: 4,
     area: 68.2,
     layout: '3LDK',
+    unitPrice: 257942.29,
     maxPrice: 29800000,
     coefTotal: 1.15,
     interiorCoef: 1.05,
@@ -259,7 +263,7 @@ test('stock repository detail/edit helpers load rows, create signed urls, and up
               assert.deepEqual(eqArgs, ['id', 'stock-1'])
               return {
                 maybeSingle: async () => ({
-                  data: { id: 'stock-1', complex_id: 'complex-1', area_sqm: 55.2, coef_total: 1.1 },
+                  data: { id: 'stock-1', complex_id: 'complex-1', area_sqm: 55.2, coef_total: 1.1, estate_entries: { unit_price: 257942.29 } },
                   error: null,
                 }),
               }
@@ -302,6 +306,7 @@ test('stock repository detail/edit helpers load rows, create signed urls, and up
     id: 'stock-1',
     complex_id: 'complex-1',
     area_sqm: 55.2,
+    entry_unit_price: 257942.29,
     coef_total: 1.1,
   })
   assert.equal(await createStockPdfSignedUrl(supabase, 'stocks/a.pdf'), 'https://example.com/stocks/a.pdf')

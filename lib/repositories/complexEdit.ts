@@ -133,7 +133,7 @@ export async function loadComplexReferenceSummaries(supabase: unknown, complexId
   const client = asComplexEditRepositoryClient(supabase)
   const { data, error } = await client
     .from('estate_entries')
-    .select('condition_status, floor, unit_price, contract_price, area_sqm, contract_date')
+    .select('condition_status, floor, unit_price, contract_price, area_sqm, contract_date, reins_registered_date')
     .eq('complex_id', complexId)
     .is('deleted_at', null)
     .limit(5000)

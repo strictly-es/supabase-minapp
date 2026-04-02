@@ -24,6 +24,7 @@ export default function StockForm({
   floors,
   selectedFloorNum,
   referenceRows,
+  coefTotalDisplay,
   saving,
   submitLabel,
   resetLabel = 'リセット',
@@ -63,7 +64,7 @@ export default function StockForm({
 
       <div className="rounded-xl border border-gray-200 p-4 bg-gray-50 text-sm space-y-1">
         <div className="font-semibold">計算メモ</div>
-        <p className="text-gray-700">目標販売成約価格 = (MAX成約単価 ㎡) × (内装+年数係数) × 階数効用比率 × 面積。</p>
+        <p className="text-gray-700">目標販売成約価格=(MAX成約m²単価×階層係数)×(年数係数×加点係数)</p>
         <p className="text-gray-700">買付目標額 = 募集総額（目標成約価格/1.21） - リノベ予算 - アップフロント - その他。</p>
       </div>
 
@@ -104,20 +105,31 @@ export default function StockForm({
 
       <section className="space-y-4">
         <h3 className="font-semibold">計算（目標販売成約価格 / 買付目標額）</h3>
-        <div className="grid md:grid-cols-4 gap-4 text-sm">
-          <label className="block">MAX成約単価（円/㎡）
+        <div className="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)_minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)]">
+          <label className="block">
+            <span className="block text-xs leading-5 text-gray-600">MAX成約単価</span>
+            <span className="block text-sm leading-5">（円/㎡）</span>
             <input name="max_unit" type="number" min="0" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 num" placeholder="350000" value={form.maxUnit} onChange={onFormChange('maxUnit')} />
           </label>
-          <label className="block">在庫物件の設定単価 (MAX成約単価×階層係数)
+          <label className="block">
+            <span className="block text-xs leading-5 text-gray-600">在庫物件の設定単価</span>
+            <span className="block text-sm leading-5">(MAX成約単価×階層係数)</span>
             <input name="coef_total" type="number" min="0" step="0.01" value={form.coefTotal} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('coefTotal')} />
           </label>
-          <label className="block">年数係数(1年間の伸び率の平均×年数)
+          <label className="block">
+            <span className="block text-xs leading-5 text-gray-600">年数係数</span>
+            <span className="block text-sm leading-5">(1年間の伸び率の平均×年数)</span>
             <input name="year_coef" type="number" min="0" step="0.01" value={form.yearCoef} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('yearCoef')} />
           </label>
-          <div className="space-y-2">
-            <div className="block">＝ 係数合計</div>
+          <label className="block">
+            <span className="block text-xs leading-5 text-gray-600">その他</span>
+            <span className="block text-sm leading-5">加点係数</span>
+            <input name="other_coef" type="number" min="0" step="0.01" value={form.otherCoef} className="mt-1 w-full border rounded-lg px-3 py-2 num" onChange={onFormChange('otherCoef')} />
+          </label>
+          <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3 self-end">
+            <div className="block text-xs leading-5 text-gray-600">＝ 係数合計</div>
             <div className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 num">
-              {form.coefTotal || '—'}
+              {coefTotalDisplay || '—'}
             </div>
           </div>
           <div className="md:col-span-4 space-y-2">

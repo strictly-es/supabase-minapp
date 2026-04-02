@@ -16,6 +16,7 @@ export type StockEntryOption = {
   floor: number | null
   area: number | null
   layout: string | null
+  unitPrice: number | null
   maxPrice: number | null
   coefTotal: number | null
   interiorCoef?: number | null
@@ -32,6 +33,7 @@ export type StockFormState = {
   contract?: string
   maxUnit: string
   yearCoef: string
+  otherCoef: string
   coefTotal: string
 }
 
@@ -55,6 +57,7 @@ export type StockFormProps = {
   floors: FloorRow[]
   selectedFloorNum: number | null
   referenceRows: ReferenceValueEntry[]
+  coefTotalDisplay?: string | null
   saving: boolean
   submitLabel: string
   resetLabel?: string

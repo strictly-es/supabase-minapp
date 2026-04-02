@@ -4,13 +4,10 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from '
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toDateInputValue, toIntOrNull } from '@/lib/entryMath'
-import { resolveMaxReferenceValue, resolveMeanReferenceCoef, resolveYearGrowthCoef } from '@/lib/referenceValue'
 import { loadComplexReferenceSummaries } from '@/lib/repositories/complexEdit'
 import {
   buildFloorRows,
-  calcBaseUnitPrice,
   safeNumber,
-  toFixedString,
   toNumberString,
 } from '@/lib/stockPricing'
 import {
@@ -36,7 +33,8 @@ const initialForm: FormState = {
   contract: '',
   maxUnit: '',
   yearCoef: '',
-  coefTotal: '1.00',
+  otherCoef: '',
+  coefTotal: '',
 }
 
 function toErrorMessage(e: unknown): string {
@@ -66,6 +64,13 @@ export default function StockEditPage() {
 
   const selectedComplex = useMemo(() => complexes.find((c) => c.id === selectedComplexId) ?? null, [complexes, selectedComplexId])
   const selectedEntry = useMemo(() => entries.find((e) => e.id === selectedEntryId) ?? null, [entries, selectedEntryId])
+  const maxLabelUnitPrice = useMemo(() => {
+    const values = entries
+      .map((entry) => entry.unitPrice)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    if (values.length === 0) return null
+    return Math.max(...values)
+  }, [entries])
 
   useEffect(() => {
     let mounted = true
@@ -93,9 +98,10 @@ export default function StockEditPage() {
             layout: row.layout ?? '',
             registered: toDateInputValue(row.registered_date),
             contract: toDateInputValue(row.contract_date),
-            maxUnit: toNumberString(row.base_unit_price),
+            maxUnit: '',
             yearCoef: '',
-            coefTotal: toFixedString(row.coef_total, initialForm.coefTotal),
+            otherCoef: '',
+            coefTotal: '',
           })
           setExistingPdfPath(row.stock_mysoku_path ?? null)
           setSignedUrl(null)
@@ -181,18 +187,29 @@ export default function StockEditPage() {
       ...prev,
       area: prev.area || (selectedEntry.area != null ? selectedEntry.area.toString() : ''),
       layout: prev.layout || (selectedEntry.layout ?? ''),
-      maxUnit: prev.maxUnit || calcBaseUnitPrice(selectedEntry.maxPrice, selectedEntry.area),
-      coefTotal: prev.coefTotal || (selectedEntry.coefTotal != null ? selectedEntry.coefTotal.toFixed(2) : '1.00'),
     }))
   }, [selectedEntry])
 
-  const baseUnit = useMemo(() => safeNumber(form.maxUnit), [form.maxUnit])
-  const baseCoef = useMemo(() => safeNumber(form.coefTotal) || 1, [form.coefTotal])
+  useEffect(() => {
+    setForm((prev) => {
+      const nextValue = maxLabelUnitPrice != null ? String(maxLabelUnitPrice) : ''
+      return prev.maxUnit === nextValue ? prev : { ...prev, maxUnit: nextValue }
+    })
+  }, [maxLabelUnitPrice])
+
+  const settingUnit = useMemo(() => safeNumber(form.coefTotal), [form.coefTotal])
   const areaNum = useMemo(() => safeNumber(form.area), [form.area])
+  const coefTotalValue = useMemo(() => {
+    if (form.yearCoef.trim() === '' && form.otherCoef.trim() === '') return null
+    return 1 + safeNumber(form.yearCoef) + safeNumber(form.otherCoef)
+  }, [form.otherCoef, form.yearCoef])
+  const coefTotalDisplay = useMemo(() => {
+    return coefTotalValue == null ? null : coefTotalValue.toFixed(2)
+  }, [coefTotalValue])
 
   const floors = useMemo(
-    () => buildFloorRows(baseUnit, baseCoef, areaNum, selectedComplex?.floorPattern),
-    [selectedComplex?.floorPattern, baseUnit, baseCoef, areaNum],
+    () => buildFloorRows(settingUnit, coefTotalValue ?? 1, areaNum, selectedComplex?.floorPattern),
+    [selectedComplex?.floorPattern, settingUnit, coefTotalValue, areaNum],
   )
 
   const selectedFloorNum = useMemo(() => {
@@ -200,41 +217,6 @@ export default function StockEditPage() {
     return Number.isFinite(n) ? n : null
   }, [form.floor])
   const selectedFloorRow = floors.find((f) => f.floor === selectedFloorNum) ?? floors[0]
-
-  useEffect(() => {
-    if (selectedFloorNum == null) return
-    const nextMaxUnit = resolveMaxReferenceValue({
-      rows: referenceRows,
-      maxFloor: selectedComplex?.floorCount ?? null,
-      floor: selectedFloorNum,
-    })
-    const nextCoef = resolveMeanReferenceCoef({
-      rows: referenceRows,
-      maxFloor: selectedComplex?.floorCount ?? null,
-      floor: selectedFloorNum,
-    })
-    setForm((prev) => {
-      const nextCoefValue = (nextCoef ?? 1).toFixed(2)
-      const nextMaxUnitValue = nextMaxUnit != null ? String(nextMaxUnit) : prev.maxUnit
-      if (prev.coefTotal === nextCoefValue && prev.maxUnit === nextMaxUnitValue) return prev
-      return {
-        ...prev,
-        maxUnit: nextMaxUnitValue,
-        coefTotal: nextCoefValue,
-      }
-    })
-  }, [referenceRows, selectedComplex?.floorCount, selectedFloorNum])
-
-  useEffect(() => {
-    const nextYearCoef = resolveYearGrowthCoef({
-      rows: referenceRows,
-      baseContractDate: selectedEntry?.contract ?? selectedEntry?.reins ?? null,
-    })
-    setForm((prev) => {
-      const nextValue = nextYearCoef == null ? '' : nextYearCoef.toFixed(2)
-      return prev.yearCoef === nextValue ? prev : { ...prev, yearCoef: nextValue }
-    })
-  }, [referenceRows, selectedEntry?.contract, selectedEntry?.reins])
 
   const onFormChange = <K extends keyof FormState>(key: K) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
@@ -264,8 +246,8 @@ export default function StockEditPage() {
         registered_date: form.registered || null,
         contract_date: form.contract || null,
         list_price: target?.targetClose ?? null,
-        base_unit_price: baseUnit || null,
-        coef_total: baseCoef || null,
+        base_unit_price: settingUnit || null,
+        coef_total: coefTotalValue,
         floor_coef: target?.floorCoef ?? null,
         target_unit_price: target?.targetUnit ?? null,
         target_close_price: target?.targetClose ?? null,
@@ -346,6 +328,7 @@ export default function StockEditPage() {
                       floors={floors}
                       selectedFloorNum={selectedFloorNum}
                       referenceRows={referenceRows}
+                      coefTotalDisplay={coefTotalDisplay}
                       saving={saving}
                       submitLabel="更新"
                       showContractDate

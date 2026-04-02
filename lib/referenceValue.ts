@@ -14,6 +14,7 @@ export type ReferenceValueEntry = {
   contract_price: number | null
   area_sqm: number | null
   contract_date?: string | null
+  reins_registered_date?: string | null
 }
 
 export type ConditionSummaryRow = {
@@ -49,6 +50,11 @@ export type YearlyReferenceSummaryRow = {
   year: number
   meanUnitPrice: number
   contractCount: number
+}
+
+export type YearGrowthCoefResult = {
+  value: number | null
+  reason: string | null
 }
 
 export const FLOOR_COEF_BASE_UNIT_PRICE = 200000
@@ -295,6 +301,10 @@ function extractContractYear(value: string | null | undefined): number | null {
   return Number.isFinite(year) ? year : null
 }
 
+function resolveReferenceEventDate(row: ReferenceValueEntry): string | null {
+  return row.contract_date ?? row.reins_registered_date ?? null
+}
+
 export function buildYearlyReferenceSummaries(rows: ReferenceValueEntry[]): YearlyReferenceSummaryRow[] {
   const grouped = new Map<number, number[]>()
 
@@ -317,25 +327,57 @@ export function buildYearlyReferenceSummaries(rows: ReferenceValueEntry[]): Year
     }))
 }
 
-export function resolveYearGrowthCoef(params: {
+export function resolveYearGrowthCoefResult(params: {
   rows: ReferenceValueEntry[]
-  baseContractDate: string | null | undefined
-}): number | null {
-  const { rows, baseContractDate } = params
-  const baseYear = extractContractYear(baseContractDate)
-  if (baseYear == null) return null
+  floor: number | null
+  condition?: ConditionStatus
+}): YearGrowthCoefResult {
+  const { rows, floor, condition = 'FULL_REFORM_ALL_EQUIP' } = params
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0) {
+    return { value: null, reason: '階数を入力すると年数係数を計算できます' }
+  }
+
+  const floorReferenceRows = rows
+    .filter((row) => row.condition_status === condition && row.floor === floor)
+    .map((row) => ({ row, unitPrice: resolveReferenceUnitPrice(row) }))
+    .filter((item) => item.unitPrice != null)
+    .sort((a, b) => (b.unitPrice ?? 0) - (a.unitPrice ?? 0))
+
+  const baseDate = floorReferenceRows[0] ? resolveReferenceEventDate(floorReferenceRows[0].row) : null
+  const baseYear = extractContractYear(baseDate)
+  if (baseYear == null) {
+    return { value: null, reason: '該当階・フルリフォームのMAX事例に成約日またはレインズ成約年月日がありません' }
+  }
 
   const yearlyRows = buildYearlyReferenceSummaries(rows)
-  if (yearlyRows.length < 2) return null
+  if (yearlyRows.length < 2) {
+    return { value: null, reason: '年度別平均㎡単価の表に2年分以上のデータがありません' }
+  }
 
   const oldest = yearlyRows[0]
   const latest = yearlyRows[yearlyRows.length - 1]
   const elapsedYears = latest.year - oldest.year
-  if (elapsedYears <= 0 || oldest.meanUnitPrice <= 0) return null
+  if (elapsedYears <= 0 || oldest.meanUnitPrice <= 0) {
+    return { value: null, reason: '年度別平均㎡単価の比較に必要な基準データが不足しています' }
+  }
 
   const yearsFromBase = latest.year - baseYear
-  if (yearsFromBase <= 0) return 0
+  if (yearsFromBase <= 0) {
+    return { value: 0, reason: null }
+  }
 
-  const annualGrowth = Math.round(((latest.meanUnitPrice / oldest.meanUnitPrice) / elapsedYears) * 100) / 100
-  return Math.round(annualGrowth * yearsFromBase * 100) / 100
+  const growthRatio = Math.round((latest.meanUnitPrice / oldest.meanUnitPrice) * 10) / 10
+  const annualGrowth = Math.round((growthRatio / elapsedYears) * 100) / 100
+  return {
+    value: Math.round(annualGrowth * yearsFromBase * 100) / 100,
+    reason: null,
+  }
+}
+
+export function resolveYearGrowthCoef(params: {
+  rows: ReferenceValueEntry[]
+  floor: number | null
+  condition?: ConditionStatus
+}): number | null {
+  return resolveYearGrowthCoefResult(params).value
 }

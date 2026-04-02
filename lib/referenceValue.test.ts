@@ -8,6 +8,7 @@ import {
   resolveMaxReferenceValue,
   resolveMeanReferenceCoef,
   resolveYearGrowthCoef,
+  resolveYearGrowthCoefResult,
   resolveReferenceUnitPrice,
   type ReferenceValueEntry,
 } from './referenceValue.ts'
@@ -236,10 +237,10 @@ test('resolveMaxReferenceValue returns the full-reform max value for the request
 
 test('buildYearlyReferenceSummaries groups by contract year with average unit price and count', () => {
   const rows: ReferenceValueEntry[] = [
-    { floor: 1, area_sqm: null, contract_price: null, unit_price: 150000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-02-01' },
-    { floor: 2, area_sqm: null, contract_price: null, unit_price: 160000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-06-15' },
-    { floor: 3, area_sqm: null, contract_price: null, unit_price: 158000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2010-03-20' },
-    { floor: 4, area_sqm: 50, contract_price: 7700000, unit_price: null, condition_status: 'OWNER_OCCUPIED', contract_date: '2010-04-01' },
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 150000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-02-01', reins_registered_date: null },
+    { floor: 2, area_sqm: null, contract_price: null, unit_price: 160000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-06-15', reins_registered_date: null },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 158000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2010-03-20', reins_registered_date: null },
+    { floor: 4, area_sqm: 50, contract_price: 7700000, unit_price: null, condition_status: 'OWNER_OCCUPIED', contract_date: '2010-04-01', reins_registered_date: null },
     { floor: 1, area_sqm: null, contract_price: null, unit_price: 140000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: null },
   ]
 
@@ -249,13 +250,34 @@ test('buildYearlyReferenceSummaries groups by contract year with average unit pr
   ])
 })
 
-test('resolveYearGrowthCoef multiplies annualized growth by elapsed years from the base contract year', () => {
+test('resolveYearGrowthCoef follows the rounded yearly growth calculation from oldest and latest averages', () => {
   const rows: ReferenceValueEntry[] = [
-    { floor: 1, area_sqm: null, contract_price: null, unit_price: 120000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-01-01' },
-    { floor: 2, area_sqm: null, contract_price: null, unit_price: 200000, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2025-01-01' },
+    { floor: 3, area_sqm: null, contract_price: null, unit_price: 175051, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2019-06-01' },
+    { floor: 1, area_sqm: null, contract_price: null, unit_price: 149687, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-01-01' },
+    { floor: 2, area_sqm: null, contract_price: null, unit_price: 180705, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2026-01-01' },
   ]
 
-  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: '2018-06-01' }), 0.7)
-  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: '2025-01-01' }), 0)
-  assert.equal(resolveYearGrowthCoef({ rows, baseContractDate: null }), null)
+  assert.equal(resolveYearGrowthCoef({ rows, floor: 3 }), 0.49)
+  assert.equal(resolveYearGrowthCoef({ rows, floor: 2 }), 0)
+  assert.equal(resolveYearGrowthCoef({ rows, floor: null }), null)
+})
+
+test('resolveYearGrowthCoefResult explains why the coefficient is blank', () => {
+  assert.deepEqual(
+    resolveYearGrowthCoefResult({
+      rows: [],
+      floor: null,
+    }),
+    { value: null, reason: '階数を入力すると年数係数を計算できます' },
+  )
+
+  assert.deepEqual(
+    resolveYearGrowthCoefResult({
+      rows: [
+        { floor: 1, area_sqm: null, contract_price: null, unit_price: 149687, condition_status: 'FULL_REFORM_ALL_EQUIP', contract_date: '2009-01-01' },
+      ],
+      floor: 1,
+    }),
+    { value: null, reason: '年度別平均㎡単価の表に2年分以上のデータがありません' },
+  )
 })
