@@ -4,6 +4,7 @@ import { safeNumber } from '../stockPricing.ts'
 type RepositoryError = { message: string }
 type QueryListResult<T> = Promise<{ data: T[] | null; error: RepositoryError | null }>
 type QueryInsertResult = Promise<{ error: RepositoryError | null }>
+type QueryInsertSingleResult<T> = Promise<{ data: T | null; error: RepositoryError | null }>
 type QueryUpdateResult = Promise<{ error: RepositoryError | null }>
 type QueryMaybeSingleResult<T> = Promise<{ data: T | null; error: RepositoryError | null }>
 
@@ -25,10 +26,23 @@ type EstateStocksSelect = {
       }
     }
   }
-  insert(payload: Record<string, unknown>): QueryInsertResult
+  insert(payload: Record<string, unknown>): QueryInsertResult | {
+    select(columns: string): {
+      single(): QueryInsertSingleResult<{ id: string }>
+    }
+  }
   update(payload: Record<string, unknown>): {
     eq(column: string, value: unknown): QueryUpdateResult
   }
+}
+
+type EstateStockCalculationsSelect = {
+  select(columns: string): {
+    eq(column: string, value: unknown): {
+      maybeSingle(): QueryMaybeSingleResult<Record<string, unknown>>
+    }
+  }
+  upsert(payload: Record<string, unknown>, options: { onConflict: string }): QueryInsertResult
 }
 
 type EstateStocksMaybeSingleSelect = {
@@ -73,6 +87,7 @@ type UploadsBucket = {
 type StocksRepositoryClient = {
   from(table: 'housing_complexes'): HousingComplexesSelect
   from(table: 'estate_stocks'): EstateStocksSelect & EstateStocksMaybeSingleSelect
+  from(table: 'estate_stock_calculations'): EstateStockCalculationsSelect
   from(table: 'estate_entries'): EstateEntriesSelect & EstateEntriesMaybeSingleSelect
   storage?: {
     from(bucket: 'uploads'): UploadsBucket
@@ -139,6 +154,19 @@ export type StockEditRow = {
   entry_unit_price?: number | null
   coef_total: number | null
   stock_mysoku_path: string | null
+}
+
+export type StockCalculationRow = {
+  stock_id: string
+  max_unit_price: number | null
+  setting_unit_price: number | null
+  year_coef: number | null
+  other_coef: number | null
+  coef_total: number | null
+  target_unit_price: number | null
+  target_close_price: number | null
+  raise_price: number | null
+  buy_target_price: number | null
 }
 
 export type StockComplexOption = {
@@ -279,10 +307,14 @@ export async function uploadStockPdf(supabase: unknown, file: File | null, userI
   return path
 }
 
-export async function insertStock(supabase: unknown, payload: Record<string, unknown>) {
+export async function insertStock(supabase: unknown, payload: Record<string, unknown>): Promise<string> {
   const client = asStocksRepositoryClient(supabase)
-  const { error } = await client.from('estate_stocks').insert(payload)
+  const query = client.from('estate_stocks').insert(payload)
+  if (!('select' in query)) throw new Error('在庫IDの取得に失敗しました')
+  const { data, error } = await query.select('id').single()
   if (error) throw error
+  if (!data?.id) throw new Error('在庫IDの取得に失敗しました')
+  return data.id
 }
 
 export async function loadStockDetail(supabase: unknown, stockId: string): Promise<StockDetailRow | null> {
@@ -315,6 +347,17 @@ export async function loadStockEdit(supabase: unknown, stockId: string): Promise
   }
 }
 
+export async function loadStockCalculation(supabase: unknown, stockId: string): Promise<StockCalculationRow | null> {
+  const client = asStocksRepositoryClient(supabase)
+  const { data, error } = await client
+    .from('estate_stock_calculations')
+    .select('stock_id, max_unit_price, setting_unit_price, year_coef, other_coef, coef_total, target_unit_price, target_close_price, raise_price, buy_target_price')
+    .eq('stock_id', stockId)
+    .maybeSingle()
+  if (error) throw error
+  return (data ?? null) as StockCalculationRow | null
+}
+
 export async function createStockPdfSignedUrl(supabase: unknown, path: string): Promise<string> {
   const client = asStocksRepositoryClient(supabase)
   if (!client.storage) throw new Error('storage client is not available')
@@ -327,5 +370,13 @@ export async function createStockPdfSignedUrl(supabase: unknown, path: string): 
 export async function updateStock(supabase: unknown, stockId: string, payload: Record<string, unknown>) {
   const client = asStocksRepositoryClient(supabase)
   const { error } = await client.from('estate_stocks').update(payload).eq('id', stockId)
+  if (error) throw error
+}
+
+export async function saveStockCalculation(supabase: unknown, payload: Record<string, unknown>) {
+  const client = asStocksRepositoryClient(supabase)
+  const { error } = await client
+    .from('estate_stock_calculations')
+    .upsert(payload, { onConflict: 'stock_id' })
   if (error) throw error
 }

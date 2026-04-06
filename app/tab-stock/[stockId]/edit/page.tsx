@@ -14,7 +14,9 @@ import {
   createStockPdfSignedUrl,
   listMaxEntriesForComplex,
   listStockComplexes,
+  loadStockCalculation,
   loadStockEdit,
+  saveStockCalculation,
   updateStock,
   uploadStockPdf,
 } from '@/lib/repositories/stocks'
@@ -84,7 +86,10 @@ export default function StockEditPage() {
       }
       setLoadingStock(true)
       try {
-        const row = await loadStockEdit(supabase, stockId)
+        const [row, calc] = await Promise.all([
+          loadStockEdit(supabase, stockId),
+          loadStockCalculation(supabase, stockId),
+        ])
         if (!row) {
           if (mounted) setMsg('在庫が見つかりませんでした')
           return
@@ -98,10 +103,10 @@ export default function StockEditPage() {
             layout: row.layout ?? '',
             registered: toDateInputValue(row.registered_date),
             contract: toDateInputValue(row.contract_date),
-            maxUnit: '',
-            yearCoef: '',
-            otherCoef: '',
-            coefTotal: '',
+            maxUnit: calc?.max_unit_price != null ? String(Math.round(calc.max_unit_price)) : '',
+            yearCoef: calc?.year_coef != null ? String(calc.year_coef) : '',
+            otherCoef: calc?.other_coef != null ? String(calc.other_coef) : '',
+            coefTotal: calc?.setting_unit_price != null ? String(calc.setting_unit_price) : '',
           })
           setExistingPdfPath(row.stock_mysoku_path ?? null)
           setSignedUrl(null)
@@ -192,7 +197,7 @@ export default function StockEditPage() {
 
   useEffect(() => {
     setForm((prev) => {
-      const nextValue = maxLabelUnitPrice != null ? String(maxLabelUnitPrice) : ''
+      const nextValue = maxLabelUnitPrice != null ? String(Math.round(maxLabelUnitPrice)) : ''
       return prev.maxUnit === nextValue ? prev : { ...prev, maxUnit: nextValue }
     })
   }, [maxLabelUnitPrice])
@@ -257,6 +262,18 @@ export default function StockEditPage() {
       if (stock_mysoku_path) payload.stock_mysoku_path = stock_mysoku_path
 
       await updateStock(supabase, stockId, payload)
+      await saveStockCalculation(supabase, {
+        stock_id: stockId,
+        max_unit_price: safeNumber(form.maxUnit) || null,
+        setting_unit_price: settingUnit || null,
+        year_coef: safeNumber(form.yearCoef) || null,
+        other_coef: safeNumber(form.otherCoef) || null,
+        coef_total: coefTotalValue,
+        target_unit_price: target?.targetUnit ?? null,
+        target_close_price: target?.targetClose ?? null,
+        raise_price: target?.raise ?? null,
+        buy_target_price: target?.buyTarget ?? null,
+      })
 
       setMsg('更新しました')
       router.push(`/tab-stock?complexId=${encodeURIComponent(selectedComplexId)}`)

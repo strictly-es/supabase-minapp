@@ -10,6 +10,7 @@ import {
   insertStock,
   loadStockEntryContext,
   listMaxEntriesForComplex,
+  saveStockCalculation,
   listStockComplexes,
   uploadStockPdf,
 } from '@/lib/repositories/stocks'
@@ -171,7 +172,7 @@ export default function StockRegPage() {
 
   useEffect(() => {
     setForm((prev) => {
-      const nextValue = maxLabelUnitPrice != null ? String(maxLabelUnitPrice) : ''
+      const nextValue = maxLabelUnitPrice != null ? String(Math.round(maxLabelUnitPrice)) : ''
       return prev.maxUnit === nextValue ? prev : { ...prev, maxUnit: nextValue }
     })
   }, [maxLabelUnitPrice])
@@ -232,7 +233,19 @@ export default function StockRegPage() {
         buy_target_price: target?.buyTarget ?? null,
         stock_mysoku_path,
       }
-      await insertStock(supabase, payload)
+      const stockId = await insertStock(supabase, payload)
+      await saveStockCalculation(supabase, {
+        stock_id: stockId,
+        max_unit_price: safeNumber(form.maxUnit) || null,
+        setting_unit_price: settingUnit || null,
+        year_coef: safeNumber(form.yearCoef) || null,
+        other_coef: safeNumber(form.otherCoef) || null,
+        coef_total: coefTotalValue,
+        target_unit_price: target?.targetUnit ?? null,
+        target_close_price: target?.targetClose ?? null,
+        raise_price: target?.raise ?? null,
+        buy_target_price: target?.buyTarget ?? null,
+      })
       setMsg('保存しました')
       setForm(initialForm)
       setPdf(null)

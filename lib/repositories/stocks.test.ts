@@ -4,11 +4,13 @@ import assert from 'node:assert/strict'
 import {
   createStockPdfSignedUrl,
   insertStock,
+  loadStockCalculation,
   loadStockEntryContext,
   listMaxEntriesForComplex,
   listStockComplexes,
   listStocksByComplex,
   loadStockDetail,
+  saveStockCalculation,
   loadStockEdit,
   softDeleteStock,
   updateStock,
@@ -191,9 +193,16 @@ test('stock repository write helpers upload, insert, and soft delete', async () 
     from: (table: string) => {
       assert.equal(table, 'estate_stocks')
       return {
-        insert: async (...args: unknown[]) => {
+        insert: (...args: unknown[]) => {
           updateCalls.push({ method: 'insert', args })
-          return { error: null }
+          return {
+            select: (...selectArgs: unknown[]) => {
+              updateCalls.push({ method: 'select', args: selectArgs })
+              return {
+                single: async () => ({ data: { id: 'stock-1' }, error: null }),
+              }
+            },
+          }
         },
         update: (...args: unknown[]) => {
           updateCalls.push({ method: 'update', args })
@@ -207,9 +216,10 @@ test('stock repository write helpers upload, insert, and soft delete', async () 
       }
     },
   }
-  await insertStock(supabaseForWrite, { complex_id: 'complex-1' })
+  assert.equal(await insertStock(supabaseForWrite, { complex_id: 'complex-1' }), 'stock-1')
   await softDeleteStock(supabaseForWrite, 'stock-1', 'user-1')
   assert.equal(updateCalls.filter((call) => call.method === 'insert').length, 1)
+  assert.equal(updateCalls.filter((call) => call.method === 'select').length, 1)
   assert.equal(updateCalls.filter((call) => call.method === 'update').length, 1)
 
   const uploads: Array<{ path: string; options: unknown }> = []
@@ -239,6 +249,40 @@ test('stock repository detail/edit helpers load rows, create signed urls, and up
   let callIndex = 0
   const supabase = {
     from: (table: string) => {
+      if (table === 'estate_stock_calculations') {
+        return {
+          select: () => ({
+            eq: (...eqArgs: unknown[]) => {
+              assert.deepEqual(eqArgs, ['stock_id', 'stock-1'])
+              return {
+                maybeSingle: async () => ({
+                  data: {
+                    stock_id: 'stock-1',
+                    max_unit_price: 257942.29,
+                    setting_unit_price: 220355,
+                    year_coef: 0.12,
+                    other_coef: 0.1,
+                    coef_total: 1.22,
+                    target_unit_price: 268833,
+                    target_close_price: 14839581,
+                    raise_price: 12260000,
+                    buy_target_price: 8940000,
+                  },
+                  error: null,
+                }),
+              }
+            },
+          }),
+          upsert: async (...args: unknown[]) => {
+            assert.deepEqual(args, [
+              { stock_id: 'stock-1', coef_total: 1.22 },
+              { onConflict: 'stock_id' },
+            ])
+            return { error: null }
+          },
+        }
+      }
+
       assert.equal(table, 'estate_stocks')
       callIndex += 1
       if (callIndex === 1) {
@@ -309,6 +353,19 @@ test('stock repository detail/edit helpers load rows, create signed urls, and up
     entry_unit_price: 257942.29,
     coef_total: 1.1,
   })
+  assert.deepEqual(await loadStockCalculation(supabase, 'stock-1'), {
+    stock_id: 'stock-1',
+    max_unit_price: 257942.29,
+    setting_unit_price: 220355,
+    year_coef: 0.12,
+    other_coef: 0.1,
+    coef_total: 1.22,
+    target_unit_price: 268833,
+    target_close_price: 14839581,
+    raise_price: 12260000,
+    buy_target_price: 8940000,
+  })
   assert.equal(await createStockPdfSignedUrl(supabase, 'stocks/a.pdf'), 'https://example.com/stocks/a.pdf')
   await updateStock(supabase, 'stock-1', { status: '買付' })
+  await saveStockCalculation(supabase, { stock_id: 'stock-1', coef_total: 1.22 })
 })
